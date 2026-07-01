@@ -71,7 +71,14 @@
   .dom .row{display:flex;align-items:center;justify-content:space-between;}
   .dom .nm{font-size:11px;letter-spacing:1.5px;font-weight:700;color:var(--cream);text-transform:uppercase;}
   .dom .key{font-size:9px;color:var(--grey-2);border:1px solid var(--line);padding:0 4px;border-radius:2px;}
+  .dom .cat{font-size:9px;letter-spacing:1.2px;color:var(--grey-2);margin-top:4px;text-transform:uppercase;font-weight:700;}
   .dom .sub{font-size:9.5px;color:var(--grey-2);margin-top:3px;letter-spacing:.4px;}
+  .dom .sub b{color:var(--amber);font-weight:700;}
+  .dom.live{border-color:rgba(249,172,36,0.55);}
+  .dom.live .cat{color:var(--amber);}
+  .dom.urgent .sub b{color:var(--red);}
+  @keyframes freshp{50%{background:rgba(249,172,36,0.26);}}
+  .dom.fresh{animation:freshp 0.5s ease-in-out 4;}
   .dom.active .nm{color:var(--amber);}
   .dom .bar-life{position:absolute;left:0;bottom:0;height:2px;background:var(--amber);width:0%;transition:width .1s linear;}
   .dom.urgent .bar-life{background:var(--red);}
@@ -171,14 +178,14 @@
 <div id="stats">
   <div class="stat money"><div class="k">Pipeline</div><div class="v" id="hPipe">$0</div></div>
   <div class="stat"><div class="k">Signals</div><div class="v" id="hCaught">0</div></div>
-  <div class="stat time"><div class="k">Shift</div><div class="v" id="hTime">90</div></div>
+  <div class="stat time"><div class="k">Time</div><div class="v" id="hTime">90</div></div>
 </div>
 
 <div id="domains">
-  <div class="dom" data-dom="sky"><div class="row"><span class="nm">Plane</span><span class="key">1</span></div><div class="sub" id="subSky">— sky —</div><div class="bar-life" id="lifeSky"></div></div>
-  <div class="dom" data-dom="ocean"><div class="row"><span class="nm">Ship</span><span class="key">2</span></div><div class="sub" id="subOcean">— ocean —</div><div class="bar-life" id="lifeOcean"></div></div>
-  <div class="dom" data-dom="road"><div class="row"><span class="nm">Truck</span><span class="key">3</span></div><div class="sub" id="subRoad">— interstate —</div><div class="bar-life" id="lifeRoad"></div></div>
-  <div class="dom" data-dom="rail"><div class="row"><span class="nm">Train</span><span class="key">4</span></div><div class="sub" id="subRail">— railroad —</div><div class="bar-life" id="lifeRail"></div></div>
+  <div class="dom" data-dom="sky"><div class="row"><span class="nm">Plane</span><span class="key">1</span></div><div class="cat">Ad Engagement</div><div class="sub" id="subSky">— watching —</div><div class="bar-life" id="lifeSky"></div></div>
+  <div class="dom" data-dom="ocean"><div class="row"><span class="nm">Ship</span><span class="key">2</span></div><div class="cat">Email Engagement</div><div class="sub" id="subOcean">— watching —</div><div class="bar-life" id="lifeOcean"></div></div>
+  <div class="dom" data-dom="road"><div class="row"><span class="nm">Truck</span><span class="key">3</span></div><div class="cat">Website Engagement</div><div class="sub" id="subRoad">— watching —</div><div class="bar-life" id="lifeRoad"></div></div>
+  <div class="dom" data-dom="rail"><div class="row"><span class="nm">Train</span><span class="key">4</span></div><div class="cat">News Signal</div><div class="sub" id="subRail">— watching —</div><div class="bar-life" id="lifeRail"></div></div>
 </div>
 
 <div id="warm"><h4>Warm list · <b id="wCount">0</b></h4><div id="warmlist"></div></div>
@@ -198,12 +205,12 @@
     <div class="kicker">Stop flying blind</div>
     <h1>CAPTURE THE <span class="am">SIGNALS.</span></h1>
     <p class="lede">Your buyers are broadcasting intent across all of their digital touchpoints. Knowing how to capture these signals is the difference between <b>sustainable growth</b> and flying blind.</p>
-    <p class="lede">Roam across <b>land, air, and sea</b> to bring them in. You can only pilot one mode at a time. Read where the signal is firing, switch to the right mode, and capture the signal before it goes cold.</p>
+    <p class="lede">Roam across <b>land, air, and sea</b> to bring them in. Each mode hunts one type of signal, and you can only pilot one at a time. Read where the signal is firing, switch to the right mode, and capture the signal before it goes cold.</p>
     <div class="legend">
-      <div class="lg"><div class="h">Plane</div><div class="kk">press 1</div></div>
-      <div class="lg"><div class="h">Ship</div><div class="kk">press 2</div></div>
-      <div class="lg"><div class="h">Truck</div><div class="kk">press 3</div></div>
-      <div class="lg"><div class="h">Train</div><div class="kk">press 4</div></div>
+      <div class="lg"><div class="h">Plane</div><div class="k">Ad engagement</div><div class="kk">press 1</div></div>
+      <div class="lg"><div class="h">Ship</div><div class="k">Email engagement</div><div class="kk">press 2</div></div>
+      <div class="lg"><div class="h">Truck</div><div class="k">Website engagement</div><div class="kk">press 3</div></div>
+      <div class="lg"><div class="h">Train</div><div class="k">News signals</div><div class="kk">press 4</div></div>
     </div>
     <button class="btn" id="startBtn">Start signal hunting →</button>
   </div>
@@ -266,10 +273,12 @@ const LANES = {
   rail:  { x:78,  y:1.0,halfW:11, color:0x1f4e79 },
 };
 const DOMAINS = ['sky','ocean','road','rail'];
-const DOM_LABEL = {sky:'Plane · sky', ocean:'Ship · ocean', road:'Truck · interstate', rail:'Train · railroad'};
+// each mode hunts one category of intent signal
+const CAT = {sky:'Ad Engagement', ocean:'Email Engagement', road:'Website Engagement', rail:'News Signal'};
 
 const WORLD_LEN = 12000;   // long corridor down +Z
 const rand=(a,b)=>a+Math.random()*(b-a);
+const lerp=(a,b,t)=>a+(b-a)*t;
 const pick=a=>a[(Math.random()*a.length)|0];
 
 // ---------- data pools ----------
@@ -683,7 +692,10 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
           : dom==='road'  ? L.x + (Math.random()<0.5?-1:1)*rand(2.5,L.halfW*0.85)
           : dom==='ocean' ? L.x + (Math.random()<0.5?-1:1)*rand(5,L.halfW*0.6)
           : L.x + rand(-L.halfW*0.5,L.halfW*0.5);
-  const v=vehicles[dom]; const z = v.z + rand(300,520);
+  // spawn distance scales with vehicle speed; both distance and life-buffer tighten as the hunt progresses,
+  // so every signal stays catchable but the margin shrinks
+  const p=running?1-timeLeft/90:0;
+  const v=vehicles[dom]; const z = v.z + Math.min(560, v.speed*rand(lerp(6.2,4.2,p),lerp(7.5,5.4,p)));
   // core
   const core=new THREE.Mesh(new THREE.SphereGeometry(1.05,16,16),coreMat); grp.add(core);
   // beam
@@ -696,9 +708,21 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   grp.userData.rings=rings; grp.userData.core=core;
   grp.position.set(x,y,z);
   scene.add(grp);
-  return {dom,grp,x,y,z,life:rand(14,19),maxLife:16,lead:genLead(),dead:false,caught:false,t:rand(0,10)};
+  const life=(z-v.z)/v.speed + lerp(rand(3.2,4.5),rand(1.1,1.8),p);
+  return {dom,grp,x,y,z,life,maxLife:life,lead:genLead(),dead:false,caught:false,t:rand(0,10)};
 }
-function ensureSignals(){ for(const d of DOMAINS){ while(signals[d].length<2) signals[d].push(mkSignal(d)); } }
+// signals dealt from a shuffled bag (fair mode mix, max one per mode);
+// cadence and concurrency ramp up as the hunt progresses
+let totalSpawned=0, nextSpawnIn=1.0, bag=[];
+function spawnNext(){
+  let tries=5; while(tries--){
+    if(!bag.length){ bag=DOMAINS.slice(); for(let i=bag.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [bag[i],bag[j]]=[bag[j],bag[i]]; } }
+    const d=bag.pop(); if(signals[d].length){ bag.unshift(d); continue; }
+    signals[d].push(mkSignal(d)); totalSpawned++;
+    flash('◈ '+CAT[d].toUpperCase(),'#F9AC24');
+    domEls[d].classList.add('fresh'); setTimeout(()=>domEls[d].classList.remove('fresh'),2200);
+    cueSpawn(d); return; } }
+function liveCount(){ let n=0; for(const d of DOMAINS) n+=signals[d].length; return n; }
 
 function killSignal(s){ s.dead=true; scene.remove(s.grp);
   s.grp.traverse(o=>{ if(o.geometry)o.geometry.dispose(); }); }
@@ -728,27 +752,54 @@ function updateParticles(dt){ for(let i=parts.length-1;i>=0;i--){ const p=parts[
   p.s.material.opacity=p.op*(1-k); p.s.scale.multiplyScalar(1+p.grow*dt);
   if(k>=1){ scene.remove(p.s); p.s.material.dispose(); parts.splice(i,1); } } }
 
-// ================= AUDIO =================
-let actx=null, eng=null, engF=null, engGain=null;
-const ENG_FREQ={sky:118,ocean:46,road:82,rail:60};
+// ================= AUDIO — a music bed per mode, crossfaded on switch =================
+let actx=null, master=null, filt=null, padOscs=[], bassTimer=null, bStep=0;
+const MUSIC={ // pad chord + 8th-note bass line + 2-bar lead melody per mode (0 = rest)
+  sky:  {bpm:92,  pwave:'triangle', chord:[220,277.18,329.63,415.30], bwave:'sine',    bass:[110,0,0,138.59, 0,0,164.81,0],          cutoff:1900, lwave:'sine',     ldur:0.5,
+         mel:[659.25,0,554.37,0, 440,0,493.88,554.37, 659.25,0,830.61,0, 739.99,659.25,0,0]},                    // Amaj7 — soaring
+  ocean:{bpm:62,  pwave:'sine',     chord:[146.83,174.61,220,261.63], bwave:'sine',    bass:[73.42,0,0,0, 0,87.31,0,98],             cutoff:1300, lwave:'sine',     ldur:0.8,
+         mel:[293.66,0,0,349.23, 0,0,440,0, 392,0,349.23,0, 293.66,0,261.63,0]},                                 // Dm7 — slow swells
+  road: {bpm:118, pwave:'sawtooth', chord:[164.81,207.65,246.94],     bwave:'square',  bass:[82.41,82.41,0,82.41, 0,82.41,123.47,0], cutoff:1500, lwave:'triangle', ldur:0.2,
+         mel:[329.63,0,415.3,493.88, 0,587.33,493.88,415.3, 329.63,0,415.3,493.88, 554.37,493.88,440,0]},        // E mixo — highway riff
+  rail: {bpm:132, pwave:'triangle', chord:[196,233.08,293.66],        bwave:'triangle',bass:[98,0,98,98, 0,98,0,116.54],             cutoff:2000, lwave:'triangle', ldur:0.16,
+         mel:[392,0,466.16,392, 587.33,0,466.16,0, 392,0,466.16,523.25, 587.33,0,698.46,587.33]},                // Gm — locomotive motif
+};
 function initAudio(){ if(actx) return; try{
   actx=new (window.AudioContext||window.webkitAudioContext)();
-  eng=actx.createOscillator(); eng.type='sawtooth'; eng.frequency.value=82;
-  engF=actx.createBiquadFilter(); engF.type='lowpass'; engF.frequency.value=520;
-  engGain=actx.createGain(); engGain.gain.value=0;
-  eng.connect(engF); engF.connect(engGain); engGain.connect(actx.destination); eng.start();
+  master=actx.createGain(); master.gain.value=0;
+  filt=actx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=1200;
+  filt.connect(master); master.connect(actx.destination);
 }catch(e){ actx=null; } }
-function engineOn(on){ if(!engGain) return; engGain.gain.setTargetAtTime(on?0.045:0, actx.currentTime, 0.25); }
-function engineFor(d){ if(!eng) return; eng.frequency.setTargetAtTime(ENG_FREQ[d]||80, actx.currentTime, 0.18); }
-function tone(freq,dur,type,gain,slideTo){ if(!actx) return; try{
-  const o=actx.createOscillator(),g=actx.createGain(); o.type=type||'sine'; o.frequency.value=freq;
-  if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, actx.currentTime+dur);
-  g.gain.value=gain||0.05; g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
-  o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+dur);
-}catch(e){} }
-const sfxCatch=()=>{ tone(680,0.09,'square',0.06); setTimeout(()=>tone(1020,0.12,'square',0.05),55); };
-const sfxSwitch=()=>{ tone(300,0.14,'sine',0.05,620); };
-const sfxMiss=()=>{ tone(150,0.22,'sawtooth',0.05,90); };
+function playNote(f,wave,dur,gain,when){ if(!actx) return; try{
+  const o=actx.createOscillator(),g=actx.createGain(); o.type=wave; o.frequency.value=f;
+  g.gain.setValueAtTime(gain,when); g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+  o.connect(g); g.connect(filt); o.start(when); o.stop(when+dur+0.05); }catch(e){} }
+function killPad(){ for(const p of padOscs){ try{ p.g.gain.setTargetAtTime(0,actx.currentTime,0.14); p.o.stop(actx.currentTime+0.9); }catch(e){} } padOscs=[]; }
+function startPad(m){ for(const f of m.chord){ const o=actx.createOscillator(),g=actx.createGain();
+  o.type=m.pwave; o.frequency.value=f; o.detune.value=rand(-6,6);
+  g.gain.value=0; g.gain.setTargetAtTime(0.018,actx.currentTime+0.05,0.5);   // pad sits UNDER the melody
+  o.connect(g); g.connect(filt); o.start(); padOscs.push({o,g}); } }
+function startSeq(m){ if(bassTimer) clearInterval(bassTimer); bStep=0; const stepDur=60/m.bpm/2;
+  bassTimer=setInterval(()=>{ if(!actx) return; const t=actx.currentTime+0.02, i=bStep++;
+    const bf=m.bass[i%m.bass.length];
+    if(bf) playNote(bf,m.bwave,Math.min(0.3,stepDur*0.9),0.05,t);
+    const mf=m.mel[i%m.mel.length];                                          // lead line, accented on the beat
+    if(mf) playNote(mf,m.lwave,m.ldur,i%4===0?0.06:0.042,t); }, stepDur*1000); }
+function musicFor(d){ if(!actx) return; const m=MUSIC[d];
+  filt.frequency.setTargetAtTime(m.cutoff,actx.currentTime,0.4);
+  killPad(); startPad(m); startSeq(m); }
+function musicOn(on){ if(!master) return; master.gain.setTargetAtTime(on?0.16:0,actx.currentTime,0.5);
+  if(!on && bassTimer){ clearInterval(bassTimer); bassTimer=null; killPad(); } }
+// cues stay in the key of the incoming mode
+function cueSpawn(d){ if(!actx) return; const c=MUSIC[d].chord, t=actx.currentTime;
+  playNote(c[c.length-1]*2,'sine',0.3,0.05,t); playNote(c[0]*4,'sine',0.34,0.04,t+0.13); }
+function cueCatch(){ if(!actx) return; const m=MUSIC[active], t=actx.currentTime;
+  m.chord.forEach((f,i)=>playNote(f*2,'triangle',0.3,0.055,t+i*0.06)); }
+function cueMiss(){ if(!actx) return; const t=actx.currentTime; try{
+  const o=actx.createOscillator(),g=actx.createGain(); o.type='sine';
+  o.frequency.setValueAtTime(160,t); o.frequency.exponentialRampToValueAtTime(70,t+0.3);
+  g.gain.setValueAtTime(0.06,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.32);
+  o.connect(g); g.connect(filt); o.start(t); o.stop(t+0.35); }catch(e){} }
 
 // ================= HUD =================
 const hPipe=document.getElementById('hPipe'),hCaught=document.getElementById('hCaught'),hTime=document.getElementById('hTime');
@@ -759,8 +810,8 @@ const lifeEls={sky:lifeSky,ocean:lifeOcean,road:lifeRoad,rail:lifeRail};
 let pipeline=0,caught=0,timeLeft=90,running=false,ended=false;
 
 function setActive(d){ const changed=d!==active; active=d; for(const k in domEls) domEls[k].classList.toggle('active',k===d);
-  engineFor(d); if(changed && actx && running) sfxSwitch(); }
-function updateHUD(){ hPipe.textContent='$'+pipeline.toLocaleString(); hCaught.textContent=caught; hTime.textContent=Math.ceil(timeLeft); hTime.classList.toggle('low',timeLeft<=15); }
+  if(changed && actx && running) musicFor(d); }
+function updateHUD(){ hPipe.textContent='$'+pipeline.toLocaleString(); hCaught.textContent=totalSpawned?caught+'/'+totalSpawned:caught; hTime.textContent=Math.ceil(timeLeft); hTime.classList.toggle('low',timeLeft<=15); }
 function addWarm(lead,score){ const d=document.createElement('div'); d.className='wlead'; d.innerHTML='<div class="nm">'+lead.name+' · '+score+'</div><div class="ti">'+lead.title+' · '+lead.co+'</div>'; warmlist.insertBefore(d,warmlist.firstChild); while(warmlist.children.length>6) warmlist.removeChild(warmlist.lastChild); wCount.textContent=caught; }
 
 const flashEl=document.getElementById('flash'); let ft;
@@ -829,25 +880,28 @@ function tick(dt,t){
         const cr = d==='sky'?11 : d==='ocean'?8 : d==='road'?5.5 : 11;
         if(dz<9 && dz>-18 && dx<cr && dy<14){ // caught
           s.caught=true; const score=Math.round(rand(64,96)); const val=score*130; pipeline+=val; caught++;
-          addWarm(s.lead,score); burst(s.x,s.y,s.z); flash('SIGNAL CAUGHT  +$'+val.toLocaleString(),'#F9AC24');
-          sfxCatch(); fovPunch=5.5; killSignal(s); }
+          addWarm(s.lead,score); burst(s.x,s.y,s.z); flash('SIGNAL CAPTURED  +$'+val.toLocaleString(),'#F9AC24');
+          cueCatch(); fovPunch=5.5; killSignal(s); }
       }
       if(!s.caught && (s.life<=0 || s.z - v.z < -40)){ // cold / passed
-        if(s.life<=0 && running && s.dom===active) sfxMiss();
+        if(running){ cueMiss(); flash('SIGNAL LOST','#E4572E'); }
         killSignal(s); }
     }
     signals[d]=arr.filter(s=>!s.dead);
   }
-  if(running) ensureSignals();
+  if(running){ const p=1-timeLeft/90;
+    const maxLive = p<0.3?1 : p<0.65?2 : 3;   // difficulty ramp: 1 → 2 → 3 concurrent signals
+    nextSpawnIn-=dt;
+    if(liveCount()<maxLive && nextSpawnIn<=0){ spawnNext(); nextSpawnIn=lerp(2.2,0.7,p); } }
 
-  // HUD domain urgency + distance
-  for(const d of DOMAINS){ const v=vehicles[d]; let nearest=null,minD=1e9;
-    for(const s of signals[d]){ if(s.dead)continue; const dz=s.z-v.z; if(dz>-10){ if(dz<minD){minD=dz;nearest=s;} } }
-    const el=domEls[d];
-    if(nearest){ subEls[d].textContent = (d===active?'▸ ':'')+Math.max(0,Math.round(minD))+'m · '+Math.ceil(nearest.life)+'s';
-      lifeEls[d].style.width=Math.max(0,Math.min(100,(nearest.life/nearest.maxLife)*100))+'%';
-      el.classList.toggle('urgent', nearest.life<5); }
-    else { subEls[d].textContent=DOM_LABEL[d].split('·')[1]; lifeEls[d].style.width='0%'; el.classList.remove('urgent'); }
+  // HUD chips — incoming indicator + countdown on the mode that owns the live signal
+  for(const d of DOMAINS){ const v=vehicles[d]; const el=domEls[d];
+    const s=signals[d].find(s=>!s.dead);
+    if(s){ const dz=Math.max(0,Math.round(s.z-v.z));
+      subEls[d].innerHTML='<b>◈ INCOMING</b> · '+dz+'m · '+Math.ceil(s.life)+'s';
+      lifeEls[d].style.width=Math.max(0,Math.min(100,(s.life/s.maxLife)*100))+'%';
+      el.classList.add('live'); el.classList.toggle('urgent', s.life<5); }
+    else { subEls[d].textContent='— watching —'; lifeEls[d].style.width='0%'; el.classList.remove('live'); el.classList.remove('urgent'); }
   }
   updateHUD();
 
@@ -909,16 +963,17 @@ const startCard=document.getElementById('startCard'),endCard=document.getElement
 function resetGame(){ for(const d of DOMAINS){ for(const s of signals[d]) if(!s.dead) killSignal(s); signals[d]=[]; }
   const st={sky:{x:0,y:60,z:40},ocean:{x:LANES.ocean.x,y:0.6,z:20},road:{x:LANES.road.x,y:0.3,z:60},rail:{x:LANES.rail.x,y:1.0,z:30}};
   for(const d of DOMAINS){ Object.assign(vehicles[d],st[d]); vehicles[d].steer=0; vehicles[d].roll=0; }
-  pipeline=0;caught=0;timeLeft=90;ended=false; warmlist.innerHTML=''; wCount.textContent='0';
-  setActive('road'); ensureSignals(); updateHUD(); }
-function startGame(){ initAudio(); resetGame(); startCard.classList.add('hidden'); endCard.classList.add('hidden'); running=true; engineOn(true); engineFor(active); }
-function endGame(){ if(ended)return; ended=true; running=false; engineOn(false);
-  document.getElementById('eCaught').textContent=caught; document.getElementById('ePipe').textContent='$'+pipeline.toLocaleString();
-  const chans=DOMAINS.filter(d=>signals[d]).length; document.getElementById('eChannels').textContent='4';
+  pipeline=0;caught=0;timeLeft=90;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; warmlist.innerHTML=''; wCount.textContent='0';
+  setActive('road'); updateHUD(); }
+function startGame(){ initAudio(); resetGame(); startCard.classList.add('hidden'); endCard.classList.add('hidden'); running=true; musicOn(true); musicFor(active); }
+function endGame(){ if(ended)return; ended=true; running=false; musicOn(false);
+  document.getElementById('eCaught').textContent=caught+'/'+totalSpawned; document.getElementById('ePipe').textContent='$'+pipeline.toLocaleString();
+  document.getElementById('eChannels').textContent='4';
   const head=document.getElementById('endHead'),kick=document.getElementById('endKicker');
-  if(caught>=22){kick.textContent='Hunt complete · sharp read';head.innerHTML='EVERY CHANNEL <span class="am">COVERED.</span>';}
-  else if(caught>=12){kick.textContent='Hunt complete';head.innerHTML='NICE <span class="am">HAUL.</span>';}
-  else {kick.textContent='Hunt complete';head.innerHTML='SIGNAL <span class="am">CAUGHT.</span>';}
+  const rate=caught/Math.max(1,totalSpawned);
+  if(rate>=0.99){kick.textContent='Hunt complete · flawless read';head.innerHTML='EVERY SIGNAL <span class="am">CAPTURED.</span>';}
+  else if(rate>=0.6){kick.textContent='Hunt complete';head.innerHTML='NICE <span class="am">HAUL.</span>';}
+  else {kick.textContent='Hunt complete';head.innerHTML='SIGNALS <span class="am">CAPTURED.</span>';}
   endCard.classList.remove('hidden'); }
 
 document.getElementById('startBtn').addEventListener('click',startGame);
@@ -931,7 +986,7 @@ document.getElementById('capBtn').addEventListener('click',()=>{ const n=capName
 // TEMP DEBUG (remove before ship): manual sim stepper for headless screenshot testing
 window.__step=(n,dt)=>{ for(let i=0;i<(n||60);i++) tick(dt||1/60); return 'stepped '+(n||60); };
 window.__setActive=d=>{ setActive(d); return active; };
-ensureSignals(); updateHUD(); setActive('road');
+updateHUD(); setActive('road');
 document.getElementById('loading').style.display='none';
 frame();
 </script>
