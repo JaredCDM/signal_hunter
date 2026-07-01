@@ -111,11 +111,13 @@
   body.touch #hint{display:none;}
 
   /* ---- overlays ---- */
-  .overlay{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:24px;
+  .overlay{position:absolute;inset:0;z-index:20;display:flex;align-items:flex-start;justify-content:center;padding:24px;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
     background:radial-gradient(120% 90% at 50% 10%, rgba(20,14,6,0.55), rgba(10,9,8,0.92) 62%, rgba(8,7,6,0.97));
     backdrop-filter:blur(4px);}
   .overlay.hidden{display:none;}
-  .panel{max-width:600px;width:100%;text-align:center;}
+  /* margin:auto centers the panel when it fits and lets it scroll when it doesn't (mobile) */
+  .panel{max-width:600px;width:100%;text-align:center;margin:auto;padding:12px 0 28px;}
   .kicker{font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:4px;color:var(--amber);text-transform:uppercase;}
   .panel h1{font-family:var(--display);font-style:italic;font-size:clamp(38px,8.5vw,72px);line-height:.92;letter-spacing:.5px;margin:14px 0 8px;color:var(--cream);}
   .panel h1 .am{color:var(--amber);}
@@ -152,9 +154,16 @@
   #loading .l b{font-family:var(--display);font-style:italic;font-size:30px;color:var(--cream);letter-spacing:0;display:block;margin-bottom:12px;}
 
   @media (max-width:760px){
-    #domains{width:150px;} #warm{display:none;}
-    .stat .v{font-size:19px;} .wordmark{font-size:20px;}
-    .dom .sub{display:none;}
+    .sysline{display:none;} #warm{display:none;}
+    .wordmark{font-size:20px;} .badge-sm{width:22px;height:22px;}
+    #stats{gap:6px;} .stat{padding:5px 10px;} .stat .v{font-size:19px;}
+    /* chips drop BELOW the stats row instead of overlapping it */
+    #domains{width:46vw;max-width:175px;top:calc(3.2vh + 112px);gap:6px;}
+    .dom{padding:6px 9px;}
+    .dom .cat{font-size:7.5px;letter-spacing:0.8px;}
+    .dom .sub{font-size:8.5px;}
+    .loglock .champbadge{width:30px;height:30px;} .loglock .wm{font-size:26px;}
+    .lede{font-size:13px;}
   }
 </style>
 </head>
