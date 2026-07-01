@@ -266,6 +266,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 // ---------- palette ----------
 const COL = {
@@ -381,8 +382,9 @@ function terrainH(x,z){ // flat on corridors, hills far east/west
 const terGeo=new THREE.PlaneGeometry(1400,WORLD_LEN,200,700);
 terGeo.rotateX(-Math.PI/2);
 { const p=terGeo.attributes.position; const cols=new Float32Array(p.count*3); const C=new THREE.Color();
-  const cSand=new THREE.Color(0xE3C58F), cScrub=new THREE.Color(0xC4A067), cOlive=new THREE.Color(0x96854e),
-        cDry=new THREE.Color(0xB5915A), cRock=new THREE.Color(0x8E7B5C), WHITE=new THREE.Color(1,1,1);
+  // golden-hour palette — pushed toward gold, away from the map's native red-brown
+  const cSand=new THREE.Color(0xE8CD97), cScrub=new THREE.Color(0xCDAF74), cOlive=new THREE.Color(0x9C8D58),
+        cDry=new THREE.Color(0xC2A268), cRock=new THREE.Color(0x99886B), WHITE=new THREE.Color(1,1,1);
   for(let i=0;i<p.count;i++){ const x=p.getX(i),z=p.getZ(i); const y=terrainH(x,z); p.setY(i,y);
     const slope=Math.abs(terrainH(x+3,z)-y)+Math.abs(terrainH(x,z+3)-y);
     C.copy(cScrub);
@@ -392,7 +394,7 @@ terGeo.rotateX(-Math.PI/2);
     C.lerp(cRock,Math.min(1,slope*0.32));              // steep = rocky
     if(x<-36) C.lerp(cSand,Math.min(1,(-36-x)/12));    // coast fades to sand
     const mot=noise(x*0.09,z*0.09); C.multiplyScalar(0.9+mot*0.2);
-    C.lerp(WHITE,0.42); // soften — vertex colors now TINT the photographic sand map, not carry it
+    C.lerp(WHITE,0.52); // soften — vertex colors now TINT the photographic sand map, not carry it
     cols[i*3]=C.r; cols[i*3+1]=C.g; cols[i*3+2]=C.b; }
   terGeo.setAttribute('color',new THREE.BufferAttribute(cols,3));
   terGeo.computeVertexNormals(); }
@@ -595,13 +597,20 @@ function mkPlane(){ const g=new THREE.Group();
   const tailc=new THREE.Mesh(new THREE.CylinderGeometry(1.22,0.34,3.6,18),white); tailc.rotation.x=Math.PI/2; tailc.position.z=-5.3; g.add(tailc);
   const cp=new THREE.Mesh(new THREE.SphereGeometry(1.02,14,10),M.glass); cp.scale.set(0.86,0.72,1.5); cp.position.set(0,0.44,4.7); g.add(cp);
   for(const s of [-1,1]) g.add(box(0.06,0.3,6.4,M.glass,1.22*s,0.28,0));
+  const amber=M.paint(0xF9AC24,0.4,0.35);
   for(const s of [-1,1]){ // swept wings with dihedral
     const wg=new THREE.BoxGeometry(9.8,0.24,2.7); wg.translate(4.9*s,0,0);
     const w=new THREE.Mesh(wg,white); w.position.set(0.72*s,-0.32,0.75); w.rotation.y=0.34*s; w.rotation.z=0.07*s; g.add(w);
+    const wlG=new THREE.BoxGeometry(0.12,1.5,1.15); wlG.translate(0,0.75,0);          // winglet, canted out
+    const wl=new THREE.Mesh(wlG,amber); wl.position.set(9.65*s,0.1,-0.6); wl.rotation.z=-0.28*s; w.add(wl);
     blinker(g,10.1*s,-0.1,-2.4,s>0?0xff3030:0x30ff50,5,s); // wingtip nav lights
     const nc=new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.54,1.9,12),M.paint(0xc9ccd2,0.3,0.7));
     nc.rotation.x=Math.PI/2; nc.position.set(3.7*s,-1.02,0.5); g.add(nc);
+    g.add(box(0.2,0.55,1.5,white,3.7*s,-0.6,0.1));                                    // engine pylon
     const inlet=new THREE.Mesh(new THREE.CircleGeometry(0.56,12),M.dark); inlet.position.set(3.7*s,-1.02,1.46); g.add(inlet);
+    const spin=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.42,10),M.chrome);
+    spin.rotation.x=Math.PI/2; spin.position.set(3.7*s,-1.02,1.62); g.add(spin);      // intake spinner
+    g.add(box(0.05,0.14,7.0,amber,1.245*s,-0.28,0.2));                                // brand cheatline
     const hg=new THREE.BoxGeometry(3.1,0.16,1.5); hg.translate(1.55*s,0,0);
     const hs=new THREE.Mesh(hg,white); hs.position.set(0.15*s,0.4,-6.4); hs.rotation.y=0.3*s; g.add(hs); }
   const fg=new THREE.BoxGeometry(0.24,3.1,1.9); fg.translate(0,1.55,0);
@@ -644,8 +653,14 @@ function mkShip(){ const g=new THREE.Group();
   for(let bay=0;bay<9;bay++) for(let cx=-1;cx<=1;cx++){             // container stacks w/ gaps
     if(Math.random()<0.12) continue; const hgt=2+(Math.random()*2.4|0);
     for(let r=0;r<hgt;r++){ const b=box(2.55,1.9,2.35,M.cont(pick(CONT_COLS)),cx*2.85,5.8+r*1.95,13.4-bay*2.9); s.add(b); } }
+  for(const sd of [-1,1]) s.add(box(0.07,0.75,32.6,M.matte(0xd6d0c0,0.7),4.38*sd,5.15,0)); // deck railings
+  for(const [cz,cs] of [[1.2,-1],[10.6,1]]){                        // deck cranes
+    const ped=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.5,5.4,10),M.matte(0xC9963C,0.7));
+    ped.position.set(3.85*cs,7.3,cz); s.add(ped);
+    const jib=box(0.3,0.3,8.6,M.matte(0xC9963C,0.7),3.85*cs,10.6,cz+2.6); jib.rotation.x=-0.42; s.add(jib); }
   const castle=box(8.2,6.2,3.6,M.matte(0xE8E2D2,0.6),0,7.8,-14.6); s.add(castle);
   s.add(box(7.6,1.0,0.14,M.glass,0,10.1,-12.76));                   // bridge window band
+  s.add(box(7.6,0.6,0.14,M.glass,0,8.9,-12.76));                    // lower window band
   s.add(box(9.8,0.9,2.2,M.matte(0xE8E2D2,0.6),0,10.6,-14.4));       // bridge wings
   const funnel=new THREE.Mesh(new THREE.CylinderGeometry(1.0,1.2,2.6,12),M.paint(0xF9AC24,0.5,0.3));
   funnel.position.set(0,12.4,-15.2); s.add(funnel);
@@ -685,6 +700,14 @@ const vehicles={
 };
 for(const d of DOMAINS){ const g=vehicles[d].mesh; g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true;
   if(o.material && o.material.envMapIntensity===1) o.material.envMapIntensity=0.9; } }); scene.add(g); }
+// soft contact shadows — ambient occlusion the directional shadow can't provide
+const blobTex=ctex(128,128,(x)=>{ const g=x.createRadialGradient(64,64,6,64,64,62);
+  g.addColorStop(0,'rgba(0,0,0,0.48)'); g.addColorStop(0.65,'rgba(0,0,0,0.22)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle=g; x.fillRect(0,0,128,128); });
+function blob(w,l){ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,l),
+    new THREE.MeshBasicMaterial({map:blobTex,transparent:true,depthWrite:false}));
+  m.rotation.x=-Math.PI/2; m.renderOrder=1; scene.add(m); return m; }
+const blobs={ road:blob(7.5,23), rail:blob(7.5,66), ocean:blob(15,46) };
 let active='road';
 
 // ================= SIGNALS =================
@@ -940,6 +963,11 @@ function tick(dt,t){
   const baseFov=58; if(fovPunch>0.02){ camera.fov=baseFov+fovPunch; camera.updateProjectionMatrix(); fovPunch*=Math.pow(0.02,dt); }
   else if(camera.fov!==baseFov){ camera.fov=baseFov; camera.updateProjectionMatrix(); }
 
+  // contact shadows track their vehicles
+  blobs.road.position.set(vehicles.road.x,0.37,vehicles.road.z-0.6);
+  blobs.rail.position.set(vehicles.rail.x,0.79,vehicles.rail.z-17);
+  blobs.ocean.position.set(vehicles.ocean.x,0.13,vehicles.ocean.z);
+
   // sun light + shadow frustum follow the active vehicle
   sun.position.copy(v.mesh.position).addScaledVector(sunDir,420);
   sun.target.position.copy(v.mesh.position);
@@ -962,6 +990,19 @@ composer.addPass(bokeh);
 const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.24,0.45,0.95);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
+// final grade — teal shadows / golden highlights, matched to the site's hero photography
+composer.addPass(new ShaderPass({
+  uniforms:{ tDiffuse:{value:null} },
+  vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader:`uniform sampler2D tDiffuse; varying vec2 vUv;
+    void main(){ vec3 c=texture2D(tDiffuse,vUv).rgb;
+      float l=dot(c,vec3(0.299,0.587,0.114));
+      c += (1.0-smoothstep(0.0,0.55,l))*vec3(-0.018,0.008,0.030);
+      c += smoothstep(0.5,1.0,l)*vec3(0.034,0.016,-0.026);
+      c = mix(vec3(l),c,1.07);
+      c = clamp((c-0.5)*1.045+0.508,0.0,1.0);
+      gl_FragColor=vec4(c,1.0); }`
+}));
 
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight); composer.setSize(innerWidth,innerHeight); });
