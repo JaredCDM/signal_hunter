@@ -252,13 +252,14 @@
 <script type="importmap">
 {
   "imports":{
-    "three":"https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"
+    "three":"https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/":"https://unpkg.com/three@0.170.0/examples/jsm/"
   }
 }
 </script>
 <script type="module">
 import * as THREE from 'three';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { Water } from 'three/addons/objects/Water.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -310,30 +311,19 @@ renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 app.appendChild(renderer.domElement);
 
 const scene=new THREE.Scene();
-scene.fog=new THREE.FogExp2(0xDDB983,0.0003);
+scene.fog=new THREE.FogExp2(0xD9A87C,0.00021);
 
 const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,1.0,6000);
 camera.position.set(0,20,-20);
 
 // low golden-hour sun direction (drives light, water glitter, sky glow)
-const SUN_ELEV=15, SUN_AZ=-44;
+const SUN_ELEV=13, SUN_AZ=-22; // matched to the HDRI's photo sun so light, shadows and sky agree
 const sunDir=new THREE.Vector3();
 { const phi=THREE.MathUtils.degToRad(90-SUN_ELEV), theta=THREE.MathUtils.degToRad(SUN_AZ); sunDir.setFromSphericalCoords(1,phi,theta); }
 
-// ---------- gradient sky dome (display-referred so it never blows out) ----------
-const SKY_TOP=new THREE.Color(0x184f7a), SKY_HOR=new THREE.Color(0xd69f5f), SKY_SUN=new THREE.Color(0xfff0cf);
-const skyGroup=new THREE.Group(); scene.add(skyGroup);
-const skyMat=new THREE.ShaderMaterial({ side:THREE.BackSide, depthWrite:false, fog:false,
-  uniforms:{ top:{value:SKY_TOP}, hor:{value:SKY_HOR}, sunc:{value:SKY_SUN}, sundir:{value:sunDir.clone()} },
-  vertexShader:`varying vec3 vP; void main(){ vP=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-  fragmentShader:`varying vec3 vP; uniform vec3 top,hor,sunc,sundir;
-    void main(){ vec3 d=normalize(vP); float h=clamp(d.y*1.15+0.04,0.0,1.0); vec3 c=mix(hor,top,pow(h,0.62));
-      float haze=exp(-abs(d.y+0.02)*8.0); c=mix(c,hor*1.05,haze*0.72);
-      float s=max(dot(d,normalize(sundir)),0.0);
-      c=mix(c,sunc,pow(s,5.0)*0.28*(1.0-h*0.55));
-      c=mix(c,sunc,pow(s,90.0)*0.5); c+=sunc*pow(s,1500.0)*1.4;
-      gl_FragColor=vec4(c,1.0);} `});
-skyGroup.add(new THREE.Mesh(new THREE.SphereGeometry(3000,32,16),skyMat));
+// ---------- photographic sky (Poly Haven HDRI) — HDR-linear, tonemapped by the OutputPass ----------
+const HDRI='assets/qwantani_sunset_puresky_2k.hdr'; // puresky = no baked-in scenery, safe to yaw freely
+let HDRI_ROT=-1.326; // yaws the photo sun to ~22° right of forward (computed from the HDR's brightest texel)
 
 // ---------- lights ----------
 const hemi=new THREE.HemisphereLight(0xcfe6ff,0x5a4028,0.55); scene.add(hemi);
@@ -349,29 +339,28 @@ scene.add(sun); scene.add(sun.target);
 const camFill=new THREE.DirectionalLight(0xb8d4ee,0.3);
 scene.add(camFill); scene.add(camFill.target);
 
-// ---------- image-based lighting from the dome (realistic reflections) ----------
+// ---------- HDRI drives both the visible sky and the IBL/reflections ----------
 const pmrem=new THREE.PMREMGenerator(renderer);
-const skyScene=new THREE.Scene(); const domeEnv=new THREE.Mesh(new THREE.SphereGeometry(3000,32,16),skyMat.clone());
-skyScene.add(domeEnv); scene.environment=pmrem.fromScene(skyScene).texture;
+new RGBELoader().load(HDRI, t=>{
+  t.mapping=THREE.EquirectangularReflectionMapping;
+  scene.background=t; scene.backgroundIntensity=0.48; // the HDR sun is ~43k nits — dim the visible sky, keep full-strength IBL
+  scene.backgroundRotation.set(0,HDRI_ROT,0); scene.environmentRotation.set(0,HDRI_ROT,0);
+  scene.environment=pmrem.fromEquirectangular(t).texture;
+  window.__sky=r=>{ scene.backgroundRotation.set(0,r,0); scene.environmentRotation.set(0,r,0); return r; }; // TEMP debug (remove before ship)
+  document.getElementById('loading').style.display='none';
+}, undefined, ()=>{ document.getElementById('loading').style.display='none'; });
+
+// ---------- PBR texture loading (Poly Haven / ambientCG, CC0) ----------
+const texL=new THREE.TextureLoader();
+function ptex(url,srgb,rx,ry){ const t=texL.load(url); if(srgb) t.colorSpace=THREE.SRGBColorSpace;
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; if(rx) t.repeat.set(rx,ry); return t; }
+const corrN=ptex('assets/corrugated_nor.jpg',false), corrR=ptex('assets/corrugated_rough.jpg',false);
 
 // ---------- procedural canvas textures ----------
 function ctex(w,h,draw,srgb){ const c=document.createElement('canvas'); c.width=w; c.height=h;
   draw(c.getContext('2d'),w,h); const t=new THREE.CanvasTexture(c);
   if(srgb!==false) t.colorSpace=THREE.SRGBColorSpace;
   t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; return t; }
-// near-white mottle multiplied over terrain vertex colors — breaks up flat ground
-const groundTex=ctex(256,256,(x,w,h)=>{ x.fillStyle='#f2efe9'; x.fillRect(0,0,w,h);
-  for(let i=0;i<2600;i++){ const g=200+(Math.random()*55|0); x.fillStyle=`rgba(${g},${g-6},${g-16},${0.12+Math.random()*0.22})`;
-    const r=Math.random()<0.85?rand(0.5,2):rand(2,5); x.beginPath(); x.arc(Math.random()*w,Math.random()*h,r,0,7); x.fill(); }
-  for(let i=0;i<60;i++){ x.strokeStyle=`rgba(150,138,118,${0.06+Math.random()*0.08})`; x.lineWidth=rand(0.5,1.6);
-    x.beginPath(); const sx=Math.random()*w,sy=Math.random()*h; x.moveTo(sx,sy); x.lineTo(sx+rand(-24,24),sy+rand(-24,24)); x.stroke(); } });
-groundTex.repeat.set(90,560);
-// container/trailer corrugation (bump only — stays linear)
-const corrTex=ctex(128,128,(x,w,h)=>{ x.fillStyle='#888'; x.fillRect(0,0,w,h);
-  for(let i=0;i<w;i+=8){ const g=x.createLinearGradient(i,0,i+8,0);
-    g.addColorStop(0,'#666'); g.addColorStop(0.45,'#c8c8c8'); g.addColorStop(0.55,'#c8c8c8'); g.addColorStop(1,'#5a5a5a');
-    x.fillStyle=g; x.fillRect(i,0,8,h); } },false);
-
 // ---------- terrain (rolling hills) ----------
 function hash(x,z){ let n=Math.sin(x*12.9898+z*78.233)*43758.5453; return n-Math.floor(n); }
 function noise(x,z){ const xi=Math.floor(x),zi=Math.floor(z),xf=x-xi,zf=z-zi;
@@ -393,7 +382,7 @@ const terGeo=new THREE.PlaneGeometry(1400,WORLD_LEN,200,700);
 terGeo.rotateX(-Math.PI/2);
 { const p=terGeo.attributes.position; const cols=new Float32Array(p.count*3); const C=new THREE.Color();
   const cSand=new THREE.Color(0xE3C58F), cScrub=new THREE.Color(0xC4A067), cOlive=new THREE.Color(0x96854e),
-        cDry=new THREE.Color(0xB5915A), cRock=new THREE.Color(0x8E7B5C);
+        cDry=new THREE.Color(0xB5915A), cRock=new THREE.Color(0x8E7B5C), WHITE=new THREE.Color(1,1,1);
   for(let i=0;i<p.count;i++){ const x=p.getX(i),z=p.getZ(i); const y=terrainH(x,z); p.setY(i,y);
     const slope=Math.abs(terrainH(x+3,z)-y)+Math.abs(terrainH(x,z+3)-y);
     C.copy(cScrub);
@@ -403,16 +392,21 @@ terGeo.rotateX(-Math.PI/2);
     C.lerp(cRock,Math.min(1,slope*0.32));              // steep = rocky
     if(x<-36) C.lerp(cSand,Math.min(1,(-36-x)/12));    // coast fades to sand
     const mot=noise(x*0.09,z*0.09); C.multiplyScalar(0.9+mot*0.2);
+    C.lerp(WHITE,0.42); // soften — vertex colors now TINT the photographic sand map, not carry it
     cols[i*3]=C.r; cols[i*3+1]=C.g; cols[i*3+2]=C.b; }
   terGeo.setAttribute('color',new THREE.BufferAttribute(cols,3));
   terGeo.computeVertexNormals(); }
-const terMat=new THREE.MeshStandardMaterial({vertexColors:true,map:groundTex,roughness:0.98,metalness:0.0,envMapIntensity:0.35});
+const terMat=new THREE.MeshStandardMaterial({vertexColors:true,
+  map:ptex('assets/sandy_gravel_02_diff_1k.jpg',true,170,1460),
+  normalMap:ptex('assets/sandy_gravel_02_nor_gl_1k.jpg',false,170,1460),
+  roughnessMap:ptex('assets/sandy_gravel_02_rough_1k.jpg',false,170,1460),
+  roughness:1.0,metalness:0.0,envMapIntensity:0.35});
 const terrain=new THREE.Mesh(terGeo,terMat); terrain.position.z=WORLD_LEN/2-200; terrain.receiveShadow=true; scene.add(terrain);
 
 // ---------- reflective ocean (three Water) ----------
 let water=null;
 { const wGeo=new THREE.PlaneGeometry(900,WORLD_LEN);
-  const wNormals=new THREE.TextureLoader().load('https://unpkg.com/three@0.160.0/examples/textures/waternormals.jpg', t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; });
+  const wNormals=new THREE.TextureLoader().load('assets/waternormals.jpg', t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; });
   water=new Water(wGeo,{ textureWidth:512, textureHeight:512, waterNormals:wNormals,
     sunDirection:sunDir.clone(), sunColor:0x8f6f42, waterColor:0x175463, distortionScale:3.4, fog:true });
   water.material.uniforms['size'].value=3.0;
@@ -442,17 +436,20 @@ function corridor(cx,width,mat){ const g=new THREE.PlaneGeometry(width,WORLD_LEN
   const mesh=new THREE.Mesh(g,mat);
   // 0.3 above the flattened terrain — anything closer z-fights at distance
   mesh.position.set(cx,0.3,WORLD_LEN/2-200); mesh.receiveShadow=true; return mesh; }
-// asphalt: speckle + darker wheel-wear tracks in each lane + patched cracks
-const asphTex=ctex(256,1024,(x,w,h)=>{ x.fillStyle='#2b2826'; x.fillRect(0,0,w,h);
-  for(let i=0;i<9000;i++){ const g=30+(Math.random()*46|0); x.fillStyle=`rgba(${g},${g-2},${g-4},${0.25+Math.random()*0.4})`;
-    x.fillRect(Math.random()*w,Math.random()*h,rand(0.5,1.8),rand(0.5,1.8)); }
-  x.fillStyle='rgba(12,10,9,0.30)';
-  for(const u of [0.355,0.409,0.591,0.645,0.135,0.19,0.81,0.865]) x.fillRect(u*w-4,0,8,h);
-  for(let i=0;i<26;i++){ x.strokeStyle=`rgba(15,13,12,${0.2+Math.random()*0.3})`; x.lineWidth=rand(0.6,1.4);
+// photographic asphalt, tiled fine; wheel-wear bands + cracks ride on top as a full-width AO layer
+const wearTex=ctex(512,1024,(x,w,h)=>{ x.fillStyle='#ffffff'; x.fillRect(0,0,w,h);
+  x.fillStyle='rgba(40,36,32,0.32)';
+  for(const u of [0.355,0.409,0.591,0.645,0.135,0.19,0.81,0.865]) x.fillRect(u*w-9,0,18,h);
+  for(let i=0;i<12;i++){ x.strokeStyle=`rgba(30,26,22,${0.12+Math.random()*0.16})`; x.lineWidth=rand(0.6,1.2);
     x.beginPath(); let cx=Math.random()*w, cy=Math.random()*h; x.moveTo(cx,cy);
-    for(let k=0;k<5;k++){ cx+=rand(-14,14); cy+=rand(8,30); x.lineTo(cx,cy);} x.stroke(); } });
-asphTex.repeat.set(1,150);
-scene.add(corridor(LANES.road.x,34,new THREE.MeshStandardMaterial({map:asphTex,roughness:0.92,metalness:0,envMapIntensity:0.25})));
+    for(let k=0;k<5;k++){ cx+=rand(-26,26); cy+=rand(16,60); x.lineTo(cx,cy);} x.stroke(); } });
+wearTex.repeat.set(1,300);
+scene.add(corridor(LANES.road.x,34,new THREE.MeshStandardMaterial({
+  map:ptex('assets/asphalt_02_diff_1k.jpg',true,4,1410),
+  normalMap:ptex('assets/asphalt_02_nor_gl_1k.jpg',false,4,1410),
+  roughnessMap:ptex('assets/asphalt_02_rough_1k.jpg',false,4,1410),
+  aoMap:wearTex, aoMapIntensity:1.0,
+  roughness:1.0,metalness:0,envMapIntensity:0.3})));
 // solid edge lines + double-yellow center
 for(const [off,cc,wd] of [[-15,0xE8DFC8,0.4],[15,0xE8DFC8,0.4],[-0.5,0xD9A63C,0.32],[0.5,0xD9A63C,0.32]]){
   const g=new THREE.PlaneGeometry(wd,WORLD_LEN); g.rotateX(-Math.PI/2);
@@ -483,11 +480,11 @@ for(const [off,cc,wd] of [[-15,0xE8DFC8,0.4],[15,0xE8DFC8,0.4],[-0.5,0xD9A63C,0.
   poleI.castShadow=armI.castShadow=true; g.add(poleI); g.add(armI); scene.add(g); }
 
 // ---------- rail ----------
-const balTex=ctex(256,256,(x,w,h)=>{ x.fillStyle='#6d6357'; x.fillRect(0,0,w,h);
-  for(let i=0;i<4200;i++){ const g=70+(Math.random()*80|0); x.fillStyle=`rgb(${g},${g-6},${g-14})`;
-    x.beginPath(); x.arc(Math.random()*w,Math.random()*h,rand(0.8,2.4),0,7); x.fill(); } });
-balTex.repeat.set(3,900);
-scene.add(corridor(LANES.rail.x,20,new THREE.MeshStandardMaterial({map:balTex,roughness:1,metalness:0,envMapIntensity:0.2})));
+scene.add(corridor(LANES.rail.x,20,new THREE.MeshStandardMaterial({
+  map:ptex('assets/gravel_road_diff_1k.jpg',true,3,1030),
+  normalMap:ptex('assets/gravel_road_nor_gl_1k.jpg',false,3,1030),
+  roughnessMap:ptex('assets/gravel_road_rough_1k.jpg',false,3,1030),
+  roughness:1.0,metalness:0,envMapIntensity:0.2})));
 for(const off of [-1.5,1.5]){ const g=new THREE.BoxGeometry(0.28,0.35,WORLD_LEN);
   const m=new THREE.MeshStandardMaterial({color:0xb8bcbf,roughness:0.22,metalness:0.9}); const r=new THREE.Mesh(g,m);
   r.position.set(LANES.rail.x+off,0.85,WORLD_LEN/2-200); scene.add(r); }
@@ -566,8 +563,8 @@ function cloudTex(){ const c=document.createElement('canvas');c.width=512;c.heig
   x.globalCompositeOperation='source-over';
   const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; }
 const cloudTexes=[cloudTex(),cloudTex(),cloudTex()];
-const clouds=[]; for(let i=0;i<22;i++){
-  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:pick(cloudTexes),transparent:true,depthWrite:false,opacity:rand(0.35,0.85)}));
+const clouds=[]; for(let i=0;i<10;i++){ // fewer + fainter: the HDRI carries the sky, sprites only add parallax
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:pick(cloudTexes),transparent:true,depthWrite:false,opacity:rand(0.18,0.45)}));
   const sc=rand(160,340); s.scale.set(sc,sc*0.5,1); s.position.set(rand(-320,320),rand(125,240),rand(200,WORLD_LEN-400)); scene.add(s); clouds.push(s); }
 
 // ================= VEHICLES =================
@@ -579,12 +576,14 @@ const M={
   tire:new THREE.MeshStandardMaterial({color:0x161616,roughness:0.94,metalness:0}),
   hub:new THREE.MeshStandardMaterial({color:0x9aa0a6,roughness:0.3,metalness:0.85}),
   dark:new THREE.MeshStandardMaterial({color:0x25262a,roughness:0.7,metalness:0.3}),
-  cont:c=>new THREE.MeshStandardMaterial({color:c,roughness:0.72,metalness:0.28,bumpMap:corrTex,bumpScale:0.45}),
+  cont:(c,rx,ry)=>{ const m=new THREE.MeshStandardMaterial({color:c,roughness:0.95,metalness:0.4,
+      normalMap:corrN.clone(),roughnessMap:corrR.clone()}); // photo ribs + wear, clean brand tint (the diffuse is rusted blue — unusable)
+    for(const t of [m.normalMap,m.roughnessMap]){ t.repeat.set(rx||2,ry||1); } return m; },
 };
 const CONT_COLS=[0xB23A2E,0xE0A43A,0x2f6f8f,0xEDE6D4,0x6a8f4f,0xF9AC24,0x8a4a3a];
 function box(w,h,d,mat,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); return m; }
-function wheel(g,x,y,z,r,w){ const t=new THREE.Mesh(new THREE.CylinderGeometry(r,r,w,18),M.tire); t.rotation.z=Math.PI/2; t.position.set(x,y,z); g.add(t);
-  const h=new THREE.Mesh(new THREE.CylinderGeometry(r*0.52,r*0.52,w+0.08,12),M.hub); h.rotation.z=Math.PI/2; h.position.set(x,y,z); g.add(h); }
+function wheel(g,x,y,z,r,w){ const t=new THREE.Mesh(new THREE.TorusGeometry(r*0.72,r*0.3,10,22),M.tire); t.rotation.y=Math.PI/2; t.position.set(x,y,z); g.add(t);
+  const h=new THREE.Mesh(new THREE.CylinderGeometry(r*0.52,r*0.52,w+0.08,14),M.hub); h.rotation.z=Math.PI/2; h.position.set(x,y,z); g.add(h); }
 function blinker(g,x,y,z,col,f,ph){ const m=new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:1.8,roughness:0.4});
   const s=new THREE.Mesh(new THREE.SphereGeometry(0.14,8,8),m); s.position.set(x,y,z); g.add(s);
   (g.userData.blink??=[]).push({m,f:f??6,ph:ph??0}); }
@@ -611,7 +610,8 @@ function mkPlane(){ const g=new THREE.Group();
   return g; }
 
 function mkTruck(){ const g=new THREE.Group();
-  const red=M.paint(0xB23A2E,0.3,0.45);
+  // clearcoat paint — the one vehicle that earns a physical material
+  const red=new THREE.MeshPhysicalMaterial({color:0xB23A2E,roughness:0.34,metalness:0.6,clearcoat:1,clearcoatRoughness:0.18,envMapIntensity:1.2});
   g.add(box(2.6,0.5,17,M.dark,0,1.15,-0.6));                        // frame rails
   const hood=box(3.2,1.9,3.4,red,0,2.1,7.7); g.add(hood);
   g.add(box(3.0,1.5,0.16,M.chrome,0,1.95,9.42));                    // grille
@@ -626,7 +626,7 @@ function mkTruck(){ const g=new THREE.Group();
   const fair=box(3.9,1.6,2.6,red,0,5.5,4.4); fair.rotation.x=0.16; g.add(fair);
   const mk=new THREE.MeshStandardMaterial({color:0xF9AC24,emissive:0xF9AC24,emissiveIntensity:1.5,roughness:0.4});
   for(const mx of [-1.1,0,1.1]){ const s=new THREE.Mesh(new THREE.SphereGeometry(0.11,8,8),mk); s.position.set(mx,6.35,4.9); g.add(s); }
-  const trailer=new THREE.Mesh(new THREE.BoxGeometry(4.4,4.6,13),M.cont(0xEDE6D4)); trailer.position.set(0,3.55,-4.4); g.add(trailer);
+  const trailer=new THREE.Mesh(new THREE.BoxGeometry(4.4,4.6,13),M.cont(0xEDE6D4,6,2)); trailer.position.set(0,3.55,-4.4); g.add(trailer);
   g.add(box(4.42,0.32,13,M.dark,0,1.35,-4.4));                      // trailer underframe
   g.add(box(4.2,4.4,0.1,M.matte(0xd9d2c0,0.8),0,3.55,-10.94));      // rear doors
   for(const s of [-1,1]) g.add(box(0.7,1.0,0.06,M.matte(0x1a1a1a),1.6*s,0.55,-9.6)); // mudflaps
@@ -673,7 +673,7 @@ function mkTrain(){ const g=new THREE.Group();
   bogie(10.4,g); bogie(3.6,g);
   for(let i=0;i<4;i++){ const z0=-2.6-i*12.4;                       // well cars + containers
     g.add(box(4.2,0.7,11,M.matte(0x33302c,0.8),0,1.75,z0-4.4));
-    g.add(new THREE.Mesh(new THREE.BoxGeometry(4.3,3.6,10.2),M.cont(pick(CONT_COLS))).translateX(0).translateY(3.95).translateZ(z0-4.4));
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(4.3,3.6,10.2),M.cont(pick(CONT_COLS),5,2)).translateX(0).translateY(3.95).translateZ(z0-4.4));
     bogie(z0+0.4,g); bogie(z0-9.2,g); }
   return g; }
 
@@ -940,8 +940,7 @@ function tick(dt,t){
   const baseFov=58; if(fovPunch>0.02){ camera.fov=baseFov+fovPunch; camera.updateProjectionMatrix(); fovPunch*=Math.pow(0.02,dt); }
   else if(camera.fov!==baseFov){ camera.fov=baseFov; camera.updateProjectionMatrix(); }
 
-  // dome follows camera; sun light + shadow frustum follow the active vehicle
-  skyGroup.position.copy(camera.position);
+  // sun light + shadow frustum follow the active vehicle
   sun.position.copy(v.mesh.position).addScaledVector(sunDir,420);
   sun.target.position.copy(v.mesh.position);
   camFill.position.copy(camera.position);
@@ -960,7 +959,7 @@ composer.addPass(new RenderPass(scene,camera));
 // cinematic depth of field — very subtle: only the far distance softens
 const bokeh=new BokehPass(scene,camera,{ focus:120.0, aperture:0.00007, maxblur:0.0022 });
 composer.addPass(bokeh);
-const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.34,0.5,0.92);
+const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.24,0.45,0.95);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -996,7 +995,7 @@ document.getElementById('capBtn').addEventListener('click',()=>{ const n=capName
 window.__step=(n,dt)=>{ for(let i=0;i<(n||60);i++) tick(dt||1/60); return 'stepped '+(n||60); };
 window.__setActive=d=>{ setActive(d); return active; };
 updateHUD(); setActive('road');
-document.getElementById('loading').style.display='none';
+setTimeout(()=>{ document.getElementById('loading').style.display='none'; },9000); // safety net if the HDRI stalls
 frame();
 </script>
 </body>
