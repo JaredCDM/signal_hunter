@@ -149,12 +149,13 @@
   .btn:hover{transform:translateY(-2px);box-shadow:0 10px 34px rgba(249,172,36,0.3);}
   .btn.ghost{background:transparent;color:var(--cream);border:1px solid var(--line);}
   .btn.ghost:hover{border-color:var(--amber);color:var(--amber);box-shadow:none;}
-  #endStats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);margin:20px 0 22px;}
+  #endStats{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);margin:20px 0 22px;}
   #endStats .es{background:rgba(15,13,11,0.9);padding:16px 10px;}
-  #endStats .es .v{font-family:var(--display);font-style:italic;font-size:clamp(26px,6vw,40px);line-height:1;color:var(--amber);}
+  #endStats .es .v{font-family:var(--display);font-style:italic;font-size:clamp(26px,6vw,40px);line-height:1;color:var(--red);} /* missed = loss, reads red */
   #endStats .es.mut .v{color:var(--cream);}
   #endStats .es .k{font-size:9px;letter-spacing:2px;color:var(--grey-2);margin-top:6px;text-transform:uppercase;}
-  .handoff{font-size:13.5px;line-height:1.6;color:var(--grey-2);max-width:470px;margin:0 auto 20px;}
+  .handoff{font-size:13.5px;line-height:1.6;color:var(--grey-2);max-width:470px;margin:0 auto 12px;}
+  .handoff.last{margin-bottom:20px;}
   .handoff b{color:var(--cream);font-weight:500;}
   .capture{display:flex;gap:8px;max-width:440px;margin:0 auto 12px;flex-wrap:wrap;}
   .capture input{flex:1 1 150px;min-width:0;background:rgba(20,20,20,0.6);border:1px solid var(--line);color:var(--cream);
@@ -256,7 +257,7 @@
     <div class="loglock"><span class="champlogo"></span></div>
     <div class="kicker">Hunt paused</div>
     <h1>TAKE A <span class="am">BREATH.</span></h1>
-    <p class="lede">The signals will wait. Press <b>space</b> — or the button — to get back out there.</p>
+    <p class="lede">Capturing intent signals manually can be exhausting. Press <b>space</b>, or the button below, to get back out there.</p>
     <button class="btn" id="resumeBtn">Resume the hunt →</button>
   </div>
 </div>
@@ -268,11 +269,12 @@
     <div class="kicker" id="endKicker">Hunt complete</div>
     <h1 id="endHead">SIGNAL <span class="am">CAUGHT.</span></h1>
     <div id="endStats">
-      <div class="es mut"><div class="v" id="eChannels">4</div><div class="k">Channels covered</div></div>
-      <div class="es"><div class="v" id="eCaught">0</div><div class="k">Signals captured</div></div>
-      <div class="es"><div class="v" id="ePipe">$0</div><div class="k">Pipeline banked</div></div>
+      <div class="es"><div class="v" id="eMissed">0</div><div class="k">Signals missed</div></div>
+      <div class="es"><div class="v" id="ePipeMissed">$0</div><div class="k">Pipeline missed</div></div>
     </div>
-    <p class="handoff">You chased signals across four modes by hand. <b>Champion's system automatically resolves intent signals to named contacts and accounts.</b> Want to see who's broadcasting inside <em>your</em> market?</p>
+    <p class="handoff" id="endBody1">You chased four types of intent signals manually, leaving a lot on the table.</p>
+    <p class="handoff">Champion's system automatically resolves intent signals to named contacts and accounts, <b>so you never miss a thing.</b></p>
+    <p class="handoff last">Want to see who's broadcasting inside <em>your</em> market?</p>
     <div class="capture">
       <input type="text" id="capName" placeholder="First name" autocomplete="given-name" />
       <input type="email" id="capEmail" placeholder="Work email" autocomplete="email" />
@@ -818,10 +820,10 @@ function mkTrain(){ const g=new THREE.Group();
   return g; }
 
 const vehicles={
-  sky:{mesh:mkPlane(),  speed:78, x:0,   y:LANES.sky.y, z:40,  steer:0, roll:0},
-  ocean:{mesh:mkShip(), speed:36, x:LANES.ocean.x, y:LANES.ocean.y, z:20, steer:0, roll:0},
-  road:{mesh:mkTruck(), speed:58, x:LANES.road.x, y:LANES.road.y, z:60, steer:0, roll:0},
-  rail:{mesh:mkTrain(), speed:52, x:LANES.rail.x, y:LANES.rail.y, z:30, steer:0, roll:0},
+  sky:{mesh:mkPlane(),  speed:78, x:0,   y:LANES.sky.y, z:40,  steer:0, roll:0, sm:0, smA:0},
+  ocean:{mesh:mkShip(), speed:36, x:LANES.ocean.x, y:LANES.ocean.y, z:20, steer:0, roll:0, sm:0, smA:0},
+  road:{mesh:mkTruck(), speed:58, x:LANES.road.x, y:LANES.road.y, z:60, steer:0, roll:0, sm:0, smA:0},
+  rail:{mesh:mkTrain(), speed:52, x:LANES.rail.x, y:LANES.rail.y, z:30, steer:0, roll:0, sm:0, smA:0},
 };
 for(const d of DOMAINS){ const g=vehicles[d].mesh; g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true;
   if(o.material && o.material.envMapIntensity===1) o.material.envMapIntensity=0.9; } }); scene.add(g); }
@@ -937,7 +939,7 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   scene.add(grp);
   // life ends at the exact moment the catch window closes (18m behind the dot) — the countdown never lies
   const life=(z-v.z+18)/v.speed;
-  return {dom,grp,x,y,z,life,maxLife:life,lead:genLead(),dead:false,caught:false,t:rand(0,10)};
+  return {dom,grp,x,y,z,life,maxLife:life,lead:genLead(),val:Math.round(rand(64,96))*130,dead:false,caught:false,t:rand(0,10)};
 }
 // signals dealt from a shuffled bag (fair mode mix, max one per mode);
 // cadence and concurrency ramp up as the hunt progresses
@@ -1035,7 +1037,7 @@ const wCount=document.getElementById('wCount'),warmlist=document.getElementById(
 const domEls={}; document.querySelectorAll('.dom').forEach(el=>domEls[el.dataset.dom]=el);
 const subEls={sky:subSky,ocean:subOcean,road:subRoad,rail:subRail};
 const lifeEls={sky:lifeSky,ocean:lifeOcean,road:lifeRoad,rail:lifeRail};
-let pipeline=0,caught=0,timeLeft=90,running=false,ended=false,paused=false;
+let pipeline=0,missedPipe=0,caught=0,timeLeft=90,running=false,ended=false,paused=false;
 function togglePause(){ if(!running) return; paused=!paused;
   document.getElementById('pausedOv').classList.toggle('hidden',!paused);
   if(actx){ if(paused){ if(bassTimer){ clearInterval(bassTimer); bassTimer=null; } actx.suspend(); }
@@ -1099,23 +1101,26 @@ function tick(dt,t){
       v.x=L.x;
     } else if(d===active && running){ if(keys['ArrowLeft']||keys['KeyA']||touch.left)steer+=1; if(keys['ArrowRight']||keys['KeyD']||touch.right)steer-=1;
       if(d==='sky'){ if(keys['ArrowUp']||keys['KeyW']||touch.up)alt+=1; if(keys['ArrowDown']||keys['KeyS']||touch.down)alt-=1; }
-      v.x += steer*45*dt; v.x=Math.max(L.x-L.halfW,Math.min(L.x+L.halfW,v.x));
     } else { // autopilot eases back toward lane center
       v.x += (L.x - v.x)*Math.min(1,dt*0.9);
     }
-    if(d==='sky'){ v.y += alt*34*dt; v.y=Math.max(L.alt[0],Math.min(L.alt[1],v.y)); }
-    // roll/bank into the turn
-    // planes bank into turns; ships heel gently; trucks DON'T tilt — they yaw with a hint of outward body sway
-    const targetRoll = steer*(d==='sky'?0.5 : d==='ocean'?0.14 : -0.03);
-    v.roll += (targetRoll-v.roll)*Math.min(1,dt*6);
+    // eased steering — input ramps in and out, so lateral motion, yaw and lean flow together
+    v.sm += (steer-v.sm)*Math.min(1,dt*4.5);
+    v.smA += (alt-v.smA)*Math.min(1,dt*4.5);
+    if(d===active && running && d!=='rail'){
+      v.x += v.sm*45*dt; v.x=Math.max(L.x-L.halfW,Math.min(L.x+L.halfW,v.x)); }
+    if(d==='sky'){ v.y += v.smA*34*dt; v.y=Math.max(L.alt[0],Math.min(L.alt[1],v.y)); }
+    // planes bank into turns; ships heel gently; trucks DON'T tilt — just a hint of outward body sway
+    const targetRoll = v.sm*(d==='sky'?0.5 : d==='ocean'?0.14 : -0.03);
+    v.roll += (targetRoll-v.roll)*Math.min(1,dt*5);
     // the ship rides the Gerstner swells — height from the sea, roll/pitch from the local slope
     const yy = d==='ocean'? 0.55 + seaY(v.x,v.z)*0.92 : v.y;
     v.mesh.position.set(v.x, yy, v.z);
-    // models are authored facing +Z (forward); yaw slightly into the steer
+    // models are authored facing +Z (forward); yaw follows the eased steer, never snaps
     v.mesh.rotation.z=v.roll + (d==='ocean'?(seaY(v.x+5,v.z)-seaY(v.x-5,v.z))*0.045:0);
-    v.mesh.rotation.y=steer*(d==='road'?0.24:0.12); // the truck visibly steers its nose instead
+    v.mesh.rotation.y=v.sm*(d==='road'?0.22:0.12);
     if(d==='ocean') v.mesh.rotation.x=(seaY(v.x,v.z+9)-seaY(v.x,v.z-9))*0.03;
-    if(d==='sky') v.mesh.rotation.x = -alt*0.16;
+    if(d==='sky') v.mesh.rotation.x = -v.smA*0.14;
   }
 
   // signals update + collect
@@ -1128,12 +1133,12 @@ function tick(dt,t){
       if(d===active){ const dz=s.z-v.z; const dx=Math.abs(s.x-v.x); const dy=d==='sky'?Math.abs(s.y-v.y):0;
         const cr = d==='sky'?11 : d==='ocean'?8 : d==='road'?5.5 : 11;
         if(dz<9 && dz>-18 && dx<cr && dy<14){ // caught
-          s.caught=true; const score=Math.round(rand(64,96)); const val=score*130; pipeline+=val; caught++;
+          s.caught=true; const val=s.val, score=val/130; pipeline+=val; caught++;
           addWarm(s.lead,score); burst(s.x,s.y,s.z); flash('SIGNAL CAPTURED  +$'+val.toLocaleString(),'#F9AC24');
           cueCatch(); fovPunch=5.5; shake=0.5; killSignal(s); }
       }
       if(!s.caught && (s.life<=0 || s.z - v.z < -40)){ // cold / passed
-        if(running){ cueMiss(); flash('SIGNAL LOST','#E4572E'); }
+        if(running){ missedPipe+=s.val; cueMiss(); flash('SIGNAL LOST','#E4572E'); }
         killSignal(s); }
     }
     signals[d]=arr.filter(s=>!s.dead);
@@ -1261,19 +1266,21 @@ const startCard=document.getElementById('startCard'),endCard=document.getElement
 function resetGame(){ for(const d of DOMAINS){ for(const s of signals[d]) if(!s.dead) killSignal(s); signals[d]=[]; }
   const st={sky:{x:0,y:60,z:40},ocean:{x:LANES.ocean.x,y:0.6,z:20},road:{x:LANES.road.x,y:0.3,z:60},rail:{x:LANES.rail.x,y:1.0,z:30}};
   for(const d of DOMAINS){ Object.assign(vehicles[d],st[d]); vehicles[d].steer=0; vehicles[d].roll=0; }
-  pipeline=0;caught=0;timeLeft=90;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; warmlist.innerHTML=''; wCount.textContent='0';
+  pipeline=0;missedPipe=0;caught=0;timeLeft=90;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; warmlist.innerHTML=''; wCount.textContent='0';
   setActive('road'); updateHUD(); }
 function startGame(){ initAudio(); resetGame(); startCard.classList.add('hidden'); endCard.classList.add('hidden');
   paused=false; document.getElementById('pausedOv').classList.add('hidden');
   running=true; if(actx&&actx.state==='suspended') actx.resume(); musicOn(true); musicFor(active); }
 function endGame(){ if(ended)return; ended=true; running=false; musicOn(false);
-  document.getElementById('eCaught').textContent=caught+'/'+totalSpawned; document.getElementById('ePipe').textContent='$'+pipeline.toLocaleString();
-  document.getElementById('eChannels').textContent='4';
-  const head=document.getElementById('endHead'),kick=document.getElementById('endKicker');
+  document.getElementById('eMissed').textContent=totalSpawned-caught;
+  document.getElementById('ePipeMissed').textContent='$'+missedPipe.toLocaleString();
+  const head=document.getElementById('endHead'),kick=document.getElementById('endKicker'),b1=document.getElementById('endBody1');
   const rate=caught/Math.max(1,totalSpawned);
-  if(rate>=0.99){kick.textContent='Hunt complete · flawless read';head.innerHTML='EVERY SIGNAL <span class="am">CAPTURED.</span>';}
-  else if(rate>=0.6){kick.textContent='Hunt complete';head.innerHTML='NICE <span class="am">HAUL.</span>';}
-  else {kick.textContent='Hunt complete';head.innerHTML='SIGNALS <span class="am">CAPTURED.</span>';}
+  kick.textContent = rate>=0.99 ? 'Hunt complete · flawless read' : 'Hunt complete';
+  if(rate>=0.99){ head.innerHTML='EVERY SIGNAL <span class="am">CAPTURED.</span>';
+    b1.textContent='You captured every signal by hand — at full sprint, across four modes. Nobody can keep that up forever.'; }
+  else { head.innerHTML='YOU LEFT A LOT ON THE <span class="am">TABLE.</span>';
+    b1.textContent='You chased four types of intent signals manually, leaving a lot on the table.'; }
   endCard.classList.remove('hidden'); }
 
 document.getElementById('startBtn').addEventListener('click',startGame);
