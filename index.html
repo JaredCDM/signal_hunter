@@ -1015,7 +1015,7 @@ function startEngines(){ if(engGains||!actx) return; engGains={};
     const g=actx.createGain(); g.gain.value=depth; o.connect(g); g.connect(param); param.value=base; o.start(); };
   const out=d=>{ const g=actx.createGain(); g.gain.value=(d===active)?1:0; g.connect(engineBus); engGains[d]=g; return g; };
   { const g=out('sky');   const b=actx.createBiquadFilter(); b.type='bandpass'; b.frequency.value=850; b.Q.value=0.4;
-    const v=actx.createGain(); v.gain.value=0.5; noise().connect(b); b.connect(v); v.connect(g); }        // jet whoosh
+    const v=actx.createGain(); v.gain.value=0.28; noise().connect(b); b.connect(v); v.connect(g); }       // jet whoosh
   { const g=out('ocean'); const v=actx.createGain(); noise().connect(lp(130)).connect(v); v.connect(g);
     lfo(0.35,0.25,0.7,v.gain); }                                                                          // deep rumble, slow swell
   { const g=out('road');  const o=actx.createOscillator(); o.type='sawtooth'; o.frequency.value=82; o.start();
