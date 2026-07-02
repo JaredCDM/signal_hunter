@@ -985,7 +985,9 @@ function updateParticles(dt){ for(let i=parts.length-1;i>=0;i--){ const p=parts[
 // ================= AUDIO — Jared's tracks, one per mode =================
 // All four loop in parallel from the first start; switching modes only crossfades
 // which one is audible, so a track never restarts when you come back to it.
-let actx=null, master=null, filt=null, musicBus=null, trackGains=null, tracksStarted=false;
+let actx=null, master=null, filt=null, musicBus=null, trackGains=null, tracksStarted=false, engineBus=null, engGains=null;
+// GTA-radio mix: effects forward, music riding underneath
+const MIX={ music:0.2, engine:0.17, cues:0.3 };
 const MUSIC={ // chord + cue-filter brightness per mode — the UI cues stay in key
   sky:  {chord:[220,277.18,329.63,415.30], cutoff:1900},
   ocean:{chord:[146.83,174.61,220,261.63], cutoff:1300},
@@ -997,11 +999,30 @@ const musicData={}; // start downloading immediately; decode happens after the s
 for(const d in MUSIC_FILES) fetch(MUSIC_FILES[d]).then(r=>r.arrayBuffer()).then(b=>{ musicData[d]=b; }).catch(()=>{});
 function initAudio(){ if(actx) return; try{
   actx=new (window.AudioContext||window.webkitAudioContext)();
-  master=actx.createGain(); master.gain.value=0.16;                    // cue bus
+  master=actx.createGain(); master.gain.value=MIX.cues;                // cue bus
   filt=actx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=1200;
   filt.connect(master); master.connect(actx.destination);
   musicBus=actx.createGain(); musicBus.gain.value=0; musicBus.connect(actx.destination);
+  engineBus=actx.createGain(); engineBus.gain.value=0; engineBus.connect(actx.destination);
 }catch(e){ actx=null; } }
+// per-mode engine beds — noise-shaped, crossfaded on switch like the music
+function startEngines(){ if(engGains||!actx) return; engGains={};
+  const nlen=2*actx.sampleRate, nbuf=actx.createBuffer(1,nlen,actx.sampleRate);
+  { const ch=nbuf.getChannelData(0); for(let i=0;i<nlen;i++) ch[i]=Math.random()*2-1; }
+  const noise=()=>{ const s=actx.createBufferSource(); s.buffer=nbuf; s.loop=true; s.start(); return s; };
+  const lp=(f,q)=>{ const b=actx.createBiquadFilter(); b.type='lowpass'; b.frequency.value=f; if(q)b.Q.value=q; return b; };
+  const lfo=(freq,depth,base,param,type)=>{ const o=actx.createOscillator(); o.type=type||'sine'; o.frequency.value=freq;
+    const g=actx.createGain(); g.gain.value=depth; o.connect(g); g.connect(param); param.value=base; o.start(); };
+  const out=d=>{ const g=actx.createGain(); g.gain.value=(d===active)?1:0; g.connect(engineBus); engGains[d]=g; return g; };
+  { const g=out('sky');   const b=actx.createBiquadFilter(); b.type='bandpass'; b.frequency.value=850; b.Q.value=0.4;
+    const v=actx.createGain(); v.gain.value=0.5; noise().connect(b); b.connect(v); v.connect(g); }        // jet whoosh
+  { const g=out('ocean'); const v=actx.createGain(); noise().connect(lp(130)).connect(v); v.connect(g);
+    lfo(0.35,0.25,0.7,v.gain); }                                                                          // deep rumble, slow swell
+  { const g=out('road');  const o=actx.createOscillator(); o.type='sawtooth'; o.frequency.value=82; o.start();
+    const ov=actx.createGain(); lfo(9,0.06,0.16,ov.gain); o.connect(ov); ov.connect(g);
+    const nv=actx.createGain(); nv.gain.value=0.3; noise().connect(lp(420)).connect(nv); nv.connect(g); } // diesel growl + road hiss
+  { const g=out('rail');  const v=actx.createGain(); noise().connect(lp(320)).connect(v); v.connect(g);
+    lfo(2.3,0.3,0.5,v.gain,'square'); } }                                                                 // clickety clatter
 async function startTracks(){ if(tracksStarted||!actx) return;
   if(Object.keys(MUSIC_FILES).some(d=>!musicData[d])){ setTimeout(startTracks,600); return; } // still downloading — retry
   tracksStarted=true;
@@ -1022,9 +1043,11 @@ function playNote(f,wave,dur,gain,when){ if(!actx) return; try{
   o.connect(g); g.connect(filt); o.start(when); o.stop(when+dur+0.05); }catch(e){} }
 function musicFor(d){ if(!actx) return;
   filt.frequency.setTargetAtTime(MUSIC[d].cutoff,actx.currentTime,0.4);
-  if(trackGains) for(const k in trackGains) trackGains[k].gain.setTargetAtTime(k===d?1:0,actx.currentTime,0.4); }
-function musicOn(on){ if(!musicBus) return; if(on) startTracks();
-  musicBus.gain.setTargetAtTime(on?0.55:0,actx.currentTime,0.5); }
+  if(trackGains) for(const k in trackGains) trackGains[k].gain.setTargetAtTime(k===d?1:0,actx.currentTime,0.4);
+  if(engGains)   for(const k in engGains)   engGains[k].gain.setTargetAtTime(k===d?1:0,actx.currentTime,0.3); }
+function musicOn(on){ if(!musicBus) return; if(on){ startTracks(); startEngines(); }
+  musicBus.gain.setTargetAtTime(on?MIX.music:0,actx.currentTime,0.5);
+  engineBus.gain.setTargetAtTime(on?MIX.engine:0,actx.currentTime,0.5); }
 // cues stay in the key of the incoming mode
 function cueSpawn(d){ if(!actx) return; const c=MUSIC[d].chord, t=actx.currentTime;
   playNote(c[c.length-1]*2,'sine',0.3,0.05,t); playNote(c[0]*4,'sine',0.34,0.04,t+0.13); }
