@@ -982,44 +982,49 @@ function updateParticles(dt){ for(let i=parts.length-1;i>=0;i--){ const p=parts[
   p.s.material.opacity=p.op*(1-k); p.s.scale.multiplyScalar(1+p.grow*dt);
   if(k>=1){ scene.remove(p.s); p.s.material.dispose(); parts.splice(i,1); } } }
 
-// ================= AUDIO — a music bed per mode, crossfaded on switch =================
-let actx=null, master=null, filt=null, padOscs=[], bassTimer=null, bStep=0;
-const MUSIC={ // pad chord + 8th-note bass line + 2-bar lead melody per mode (0 = rest)
-  sky:  {bpm:92,  pwave:'triangle', chord:[220,277.18,329.63,415.30], bwave:'sine',    bass:[110,0,0,138.59, 0,0,164.81,0],          cutoff:1900, lwave:'sine',     ldur:0.5,
-         mel:[659.25,0,554.37,0, 440,0,493.88,554.37, 659.25,0,830.61,0, 739.99,659.25,0,0]},                    // Amaj7 — soaring
-  ocean:{bpm:62,  pwave:'sine',     chord:[146.83,174.61,220,261.63], bwave:'sine',    bass:[73.42,0,0,0, 0,87.31,0,98],             cutoff:1300, lwave:'sine',     ldur:0.8,
-         mel:[293.66,0,0,349.23, 0,0,440,0, 392,0,349.23,0, 293.66,0,261.63,0]},                                 // Dm7 — slow swells
-  road: {bpm:118, pwave:'sawtooth', chord:[164.81,207.65,246.94],     bwave:'square',  bass:[82.41,82.41,0,82.41, 0,82.41,123.47,0], cutoff:1500, lwave:'triangle', ldur:0.2,
-         mel:[329.63,0,415.3,493.88, 0,587.33,493.88,415.3, 329.63,0,415.3,493.88, 554.37,493.88,440,0]},        // E mixo — highway riff
-  rail: {bpm:132, pwave:'triangle', chord:[196,233.08,293.66],        bwave:'triangle',bass:[98,0,98,98, 0,98,0,116.54],             cutoff:2000, lwave:'triangle', ldur:0.16,
-         mel:[392,0,466.16,392, 587.33,0,466.16,0, 392,0,466.16,523.25, 587.33,0,698.46,587.33]},                // Gm — locomotive motif
+// ================= AUDIO — Jared's tracks, one per mode =================
+// All four loop in parallel from the first start; switching modes only crossfades
+// which one is audible, so a track never restarts when you come back to it.
+let actx=null, master=null, filt=null, musicBus=null, trackGains=null, tracksStarted=false;
+const MUSIC={ // chord + cue-filter brightness per mode — the UI cues stay in key
+  sky:  {chord:[220,277.18,329.63,415.30], cutoff:1900},
+  ocean:{chord:[146.83,174.61,220,261.63], cutoff:1300},
+  road: {chord:[164.81,207.65,246.94],     cutoff:1500},
+  rail: {chord:[196,233.08,293.66],        cutoff:2000},
 };
+const MUSIC_FILES={sky:'assets/music-sky.mp3',ocean:'assets/music-ocean.mp3',road:'assets/music-road.mp3',rail:'assets/music-rail.mp3'};
+const musicData={}; // start downloading immediately; decode happens after the start-button gesture
+for(const d in MUSIC_FILES) fetch(MUSIC_FILES[d]).then(r=>r.arrayBuffer()).then(b=>{ musicData[d]=b; }).catch(()=>{});
 function initAudio(){ if(actx) return; try{
   actx=new (window.AudioContext||window.webkitAudioContext)();
-  master=actx.createGain(); master.gain.value=0;
+  master=actx.createGain(); master.gain.value=0.16;                    // cue bus
   filt=actx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=1200;
   filt.connect(master); master.connect(actx.destination);
+  musicBus=actx.createGain(); musicBus.gain.value=0; musicBus.connect(actx.destination);
 }catch(e){ actx=null; } }
+async function startTracks(){ if(tracksStarted||!actx) return;
+  if(Object.keys(MUSIC_FILES).some(d=>!musicData[d])){ setTimeout(startTracks,600); return; } // still downloading — retry
+  tracksStarted=true;
+  try{
+    const bufs=await Promise.all(Object.keys(MUSIC_FILES).map(d=>actx.decodeAudioData(musicData[d].slice(0)).then(b=>[d,b])));
+    const t0=actx.currentTime+0.08, gains={};
+    for(const [d,buf] of bufs){
+      const ch=buf.getChannelData(0); let end=ch.length-1;             // trim trailing silence → gapless loop
+      while(end>0 && Math.abs(ch[end])<0.001) end--;
+      const src=actx.createBufferSource(); src.buffer=buf; src.loop=true; src.loopEnd=end/buf.sampleRate;
+      const g=actx.createGain(); g.gain.value=(d===active)?1:0;
+      src.connect(g); g.connect(musicBus); src.start(t0); gains[d]=g; }
+    trackGains=gains;
+  }catch(e){ console.warn('music decode failed',e); tracksStarted=false; } }
 function playNote(f,wave,dur,gain,when){ if(!actx) return; try{
   const o=actx.createOscillator(),g=actx.createGain(); o.type=wave; o.frequency.value=f;
   g.gain.setValueAtTime(gain,when); g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
   o.connect(g); g.connect(filt); o.start(when); o.stop(when+dur+0.05); }catch(e){} }
-function killPad(){ for(const p of padOscs){ try{ p.g.gain.setTargetAtTime(0,actx.currentTime,0.14); p.o.stop(actx.currentTime+0.9); }catch(e){} } padOscs=[]; }
-function startPad(m){ for(const f of m.chord){ const o=actx.createOscillator(),g=actx.createGain();
-  o.type=m.pwave; o.frequency.value=f; o.detune.value=rand(-6,6);
-  g.gain.value=0; g.gain.setTargetAtTime(0.018,actx.currentTime+0.05,0.5);   // pad sits UNDER the melody
-  o.connect(g); g.connect(filt); o.start(); padOscs.push({o,g}); } }
-function startSeq(m){ if(bassTimer) clearInterval(bassTimer); bStep=0; const stepDur=60/m.bpm/2;
-  bassTimer=setInterval(()=>{ if(!actx) return; const t=actx.currentTime+0.02, i=bStep++;
-    const bf=m.bass[i%m.bass.length];
-    if(bf) playNote(bf,m.bwave,Math.min(0.3,stepDur*0.9),0.05,t);
-    const mf=m.mel[i%m.mel.length];                                          // lead line, accented on the beat
-    if(mf) playNote(mf,m.lwave,m.ldur,i%4===0?0.06:0.042,t); }, stepDur*1000); }
-function musicFor(d){ if(!actx) return; const m=MUSIC[d];
-  filt.frequency.setTargetAtTime(m.cutoff,actx.currentTime,0.4);
-  killPad(); startPad(m); startSeq(m); }
-function musicOn(on){ if(!master) return; master.gain.setTargetAtTime(on?0.16:0,actx.currentTime,0.5);
-  if(!on && bassTimer){ clearInterval(bassTimer); bassTimer=null; killPad(); } }
+function musicFor(d){ if(!actx) return;
+  filt.frequency.setTargetAtTime(MUSIC[d].cutoff,actx.currentTime,0.4);
+  if(trackGains) for(const k in trackGains) trackGains[k].gain.setTargetAtTime(k===d?1:0,actx.currentTime,0.4); }
+function musicOn(on){ if(!musicBus) return; if(on) startTracks();
+  musicBus.gain.setTargetAtTime(on?0.55:0,actx.currentTime,0.5); }
 // cues stay in the key of the incoming mode
 function cueSpawn(d){ if(!actx) return; const c=MUSIC[d].chord, t=actx.currentTime;
   playNote(c[c.length-1]*2,'sine',0.3,0.05,t); playNote(c[0]*4,'sine',0.34,0.04,t+0.13); }
@@ -1040,8 +1045,7 @@ const lifeEls={sky:lifeSky,ocean:lifeOcean,road:lifeRoad,rail:lifeRail};
 let pipeline=0,missedPipe=0,caught=0,timeLeft=90,running=false,ended=false,paused=false;
 function togglePause(){ if(!running) return; paused=!paused;
   document.getElementById('pausedOv').classList.toggle('hidden',!paused);
-  if(actx){ if(paused){ if(bassTimer){ clearInterval(bassTimer); bassTimer=null; } actx.suspend(); }
-            else { actx.resume(); musicFor(active); } } }
+  if(actx){ if(paused) actx.suspend(); else actx.resume(); } } // buffers freeze mid-note and resume in place
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && running && !paused) togglePause(); });
 
 function setActive(d){ if(paused) return; const changed=d!==active; active=d; for(const k in domEls) domEls[k].classList.toggle('active',k===d);
