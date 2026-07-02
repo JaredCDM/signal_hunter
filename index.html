@@ -296,6 +296,8 @@
 <script type="module">
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
 import { Water } from 'three/addons/objects/Water.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -833,6 +835,70 @@ function blob(w,l){ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,l),
 const blobs={ road:blob(7.5,23), rail:blob(7.5,66) }; // no ocean blob — a flat shadow can't sit on displaced swells
 let active='road';
 
+// ---------- Champion jet (Jared's GLB) replaces the procedural plane ----------
+{ const inkify=img=>{ const c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
+    const x=c.getContext('2d'); x.drawImage(img,0,0);
+    x.globalCompositeOperation='source-in'; x.fillStyle='#181512'; x.fillRect(0,0,c.width,c.height); return c; };
+  const loadImg=u=>new Promise(r=>{ const i=new Image(); i.onload=()=>r(i); i.onerror=()=>r(null); i.src=u; });
+  Promise.all([ new GLTFLoader().loadAsync('assets/champion-jet.glb').catch(()=>null),
+                loadImg('assets/champion-lockup-cream.png'), loadImg('assets/cream-logo.png') ])
+  .then(([gltf,lockupImg,badgeImg])=>{
+    if(!gltf||!lockupImg||!badgeImg) return;            // keep the procedural plane on any failure
+    const jet=gltf.scene;
+    const paint=new THREE.MeshStandardMaterial({color:0xEFE9DC,metalness:0.22,roughness:0.34,envMapIntensity:1.25});
+    jet.traverse(o=>{ if(!o.isMesh) return; o.castShadow=true;
+      const n=(o.material&&o.material.name)||'';
+      if(n==='glass') o.material=M.glass;
+      else if(n==='Material'||n==='Material.009'||n==='Material.001'||n==='Material.002') o.material=paint;
+      else if(o.material) o.material.envMapIntensity=1.1; });
+    // normalize: wingspan 20, centered on the fuselage
+    const stage=new THREE.Group(); stage.add(jet); scene.add(stage); stage.updateMatrixWorld(true);
+    const size=new THREE.Box3().setFromObject(jet).getSize(new THREE.Vector3());
+    jet.scale.setScalar(20/size.x); stage.updateMatrixWorld(true);
+    const ctr=new THREE.Box3().setFromObject(jet).getCenter(new THREE.Vector3());
+    jet.position.sub(ctr); stage.updateMatrixWorld(true);
+    let fus=null,best=0; jet.traverse(o=>{ if(o.isMesh){ const n=o.geometry.attributes.position.count; if(n>best){best=n;fus=o;} } });
+    const ink=inkify(lockupImg), inkBadge=inkify(badgeImg);
+    const dtex=cv=>{ const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=8; return t; };
+    // livery band: pinstripes full-length, lockup toward the nose (mirrored per side so titles read nose-first)
+    const livery=side=>{ const c=document.createElement('canvas'); c.width=2048; c.height=256; const x=c.getContext('2d');
+      x.save(); if(side<0){ x.translate(2048,0); x.scale(-1,1); }
+      x.fillStyle='#181512';
+      [[166,7],[182,5],[195,4],[206,3]].forEach(([y,h])=>x.fillRect(0,y,2048,h));
+      const lw=350, lh=lw*(lockupImg.height/lockupImg.width);
+      x.drawImage(ink,265,150-lh,lw,lh);
+      x.restore(); return dtex(c); };
+    const badgeTex=()=>{ const c=document.createElement('canvas'); c.width=256; c.height=256;
+      c.getContext('2d').drawImage(inkBadge,0,0,256,256); return dtex(c); };
+    const decals=[];
+    const JET={ ty:-0.4, tz:1.0, len:16, h:4, bx:0, by:2.3, bz:-8.0, bs:2.3, bd:1.6 };
+    function buildDecals(cfg){ Object.assign(JET,cfg||{});
+      for(const d of decals){ stage.remove(d); d.geometry.dispose(); } decals.length=0;
+      // rebuild with the stage briefly at the origin so world == local
+      const sp=stage.position.clone(), sr=stage.rotation.clone();
+      stage.position.set(0,0,0); stage.rotation.set(0,0,0); stage.updateMatrixWorld(true);
+      const mk=(tex,pos,rotY,sz)=>{ const m=new THREE.Mesh(
+          new DecalGeometry(fus,pos,new THREE.Euler(0,rotY,0),sz),
+          new THREE.MeshStandardMaterial({map:tex,transparent:true,depthTest:true,depthWrite:false,
+            polygonOffset:true,polygonOffsetFactor:-4,roughness:0.5,metalness:0.1}));
+        m.renderOrder=3; stage.add(m); decals.push(m); };
+      mk(livery(1),  new THREE.Vector3( 1.6,JET.ty,JET.tz),  Math.PI/2, new THREE.Vector3(JET.len,JET.h,3));
+      mk(livery(-1), new THREE.Vector3(-1.6,JET.ty,JET.tz), -Math.PI/2, new THREE.Vector3(JET.len,JET.h,3));
+      // one projector through the thin fin textures both faces (far side mirrors — imperceptible on the badge)
+      mk(badgeTex(), new THREE.Vector3(JET.bx,JET.by,JET.bz), Math.PI/2, new THREE.Vector3(JET.bs,JET.bs,JET.bd));
+      stage.position.copy(sp); stage.rotation.copy(sr); stage.updateMatrixWorld(true); }
+    buildDecals();
+    window.__jet=buildDecals; // TEMP tuning hook (remove before ship)
+    // swap in: the stage becomes the sky vehicle
+    stage.userData.blink=[];
+    const tip=new THREE.Box3().setFromObject(jet);
+    blinker(stage, 9.8,0.1,-1.0,0xff3030,5, 1);
+    blinker(stage,-9.8,0.1,-1.0,0x30ff50,5,-1);
+    blinker(stage,0,tip.max.y-0.15,tip.min.z+1.2,0xff3030,7,2);
+    const old=vehicles.sky.mesh; scene.remove(old);
+    stage.position.copy(old.position); vehicles.sky.mesh=stage;
+  }); }
+
 // ================= SIGNALS =================
 const signals={sky:[],ocean:[],road:[],rail:[]};
 // signal markers are gameplay UI — fog:false so they stay legible at range instead of fading into the haze
@@ -1222,6 +1288,8 @@ document.getElementById('capBtn').addEventListener('click',()=>{ const n=capName
 // TEMP DEBUG (remove before ship): manual sim stepper for headless screenshot testing
 window.__step=(n,dt)=>{ for(let i=0;i<(n||60);i++) tick(dt||1/60); return 'stepped '+(n||60); };
 window.__setActive=d=>{ setActive(d); return active; };
+window.__cam=(x,y,z,tx,ty,tz)=>{ camera.position.set(x,y,z); camera.lookAt(tx,ty,tz); return 'cam set'; }; // TEMP: works while paused
+window.__pos=d=>vehicles[d].mesh.position.toArray(); // TEMP
 updateHUD(); setActive('road');
 setTimeout(()=>{ document.getElementById('loading').style.display='none'; },9000); // safety net if the HDRI stalls
 frame();
