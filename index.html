@@ -915,13 +915,13 @@ new GLTFLoader().loadAsync('assets/champion-ship.glb').catch(()=>null).then(gltf
   ship.traverse(o=>{ if(o.isMesh){ o.castShadow=true;
     if(o.material && o.material.envMapIntensity===1) o.material.envMapIntensity=1.0; } });
   const stage=new THREE.Group(); stage.add(ship); scene.add(stage); stage.updateMatrixWorld(true);
-  ship.rotation.y=-Math.PI/2;                              // hull runs along +X in the file — yaw onto +Z
+  ship.rotation.y=Math.PI/2;                               // hull runs along X in the file — yaw bow-first onto +Z
   stage.updateMatrixWorld(true);
   const size=new THREE.Box3().setFromObject(ship).getSize(new THREE.Vector3());
   ship.scale.setScalar(42/size.z); stage.updateMatrixWorld(true);
   const bb=new THREE.Box3().setFromObject(ship), c=bb.getCenter(new THREE.Vector3());
   ship.position.x-=c.x; ship.position.z-=c.z;
-  ship.position.y-=bb.min.y+(bb.max.y-bb.min.y)*0.2;       // waterline: ~20% of the hull rides below the origin
+  ship.position.y-=bb.min.y+(bb.max.y-bb.min.y)*0.09;      // waterline: half the black lower-hull band below water
   stage.updateMatrixWorld(true);
   stage.userData.blink=[];
   const bb2=new THREE.Box3().setFromObject(stage);
