@@ -59,6 +59,7 @@
   .stat .v{font-family:var(--display);font-style:italic;font-size:23px;line-height:1.15;margin-top:2px;color:var(--cream);}
   .stat.money .v{color:var(--amber);}
   .stat.time .v.low{color:var(--red);}
+  .stat.time{pointer-events:auto;cursor:pointer;} /* tap the clock to pause (mobile has no spacebar) */
 
   /* ---- domain compass (right) ---- */
   #domains{position:absolute;top:calc(3.2vh + 52px);right:20px;z-index:8;display:flex;flex-direction:column;gap:8px;width:190px;}
@@ -222,7 +223,7 @@
 
 <div id="warm"><h4>Warm list · <b id="wCount">0</b></h4><div id="warmlist"></div></div>
 
-<div id="hint">STEER <b>← →</b> · ALTITUDE <b>↑ ↓</b> · SWITCH VEHICLE <b>1–4</b></div>
+<div id="hint">STEER <b>← →</b> · ALTITUDE <b>↑ ↓</b> · SWITCH VEHICLE <b>1–4</b> · PAUSE <b>SPACE</b></div>
 <div id="flash"></div>
 <div id="alert"><div class="a-kick">New signal detected</div><div class="a-type" id="alertType"></div><div class="a-mode" id="alertMode"></div></div>
 
@@ -246,6 +247,17 @@
       <div class="lg"><div class="h">Train</div><div class="k">News signals</div><div class="kk">press 4</div></div>
     </div>
     <button class="btn" id="startBtn">Start signal hunting →</button>
+  </div>
+</div>
+
+<!-- PAUSE -->
+<div class="overlay hidden" id="pausedOv">
+  <div class="panel">
+    <div class="loglock"><span class="champlogo"></span></div>
+    <div class="kicker">Hunt paused</div>
+    <h1>TAKE A <span class="am">BREATH.</span></h1>
+    <p class="lede">The signals will wait. Press <b>space</b> — or the button — to get back out there.</p>
+    <button class="btn" id="resumeBtn">Resume the hunt →</button>
   </div>
 </div>
 
@@ -857,8 +869,8 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   grp.userData.rings=rings; grp.userData.core=core;
   grp.position.set(x,y,z);
   scene.add(grp);
-  // life = exact time until the vehicle passes the signal (+catch-window slack) — the countdown never lies
-  const life=(z-v.z)/v.speed + 0.8;
+  // life ends at the exact moment the catch window closes (18m behind the dot) — the countdown never lies
+  const life=(z-v.z+18)/v.speed;
   return {dom,grp,x,y,z,life,maxLife:life,lead:genLead(),dead:false,caught:false,t:rand(0,10)};
 }
 // signals dealt from a shuffled bag (fair mode mix, max one per mode);
@@ -957,9 +969,14 @@ const wCount=document.getElementById('wCount'),warmlist=document.getElementById(
 const domEls={}; document.querySelectorAll('.dom').forEach(el=>domEls[el.dataset.dom]=el);
 const subEls={sky:subSky,ocean:subOcean,road:subRoad,rail:subRail};
 const lifeEls={sky:lifeSky,ocean:lifeOcean,road:lifeRoad,rail:lifeRail};
-let pipeline=0,caught=0,timeLeft=90,running=false,ended=false;
+let pipeline=0,caught=0,timeLeft=90,running=false,ended=false,paused=false;
+function togglePause(){ if(!running) return; paused=!paused;
+  document.getElementById('pausedOv').classList.toggle('hidden',!paused);
+  if(actx){ if(paused){ if(bassTimer){ clearInterval(bassTimer); bassTimer=null; } actx.suspend(); }
+            else { actx.resume(); musicFor(active); } } }
+document.addEventListener('visibilitychange',()=>{ if(document.hidden && running && !paused) togglePause(); });
 
-function setActive(d){ const changed=d!==active; active=d; for(const k in domEls) domEls[k].classList.toggle('active',k===d);
+function setActive(d){ if(paused) return; const changed=d!==active; active=d; for(const k in domEls) domEls[k].classList.toggle('active',k===d);
   if(changed && actx && running) musicFor(d); }
 function updateHUD(){ hPipe.textContent='$'+pipeline.toLocaleString(); hCaught.textContent=totalSpawned?caught+'/'+totalSpawned:caught; hTime.textContent=Math.ceil(timeLeft); hTime.classList.toggle('low',timeLeft<=15); }
 function addWarm(lead,score){ const d=document.createElement('div'); d.className='wlead'; d.innerHTML='<div class="nm">'+lead.name+' · '+score+'</div><div class="ti">'+lead.title+' · '+lead.co+'</div>'; warmlist.insertBefore(d,warmlist.firstChild); while(warmlist.children.length>6) warmlist.removeChild(warmlist.lastChild); wCount.textContent=caught; }
@@ -979,6 +996,7 @@ function flash(msg,color){ flashEl.textContent=msg; flashEl.style.color=color; f
 // ================= INPUT =================
 const keys={};
 addEventListener('keydown',e=>{ keys[e.code]=true;
+  if(e.code==='Space' && !e.repeat) togglePause();
   if(e.code==='Digit1')setActive('sky'); if(e.code==='Digit2')setActive('ocean');
   if(e.code==='Digit3')setActive('road'); if(e.code==='Digit4')setActive('rail');
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code))e.preventDefault();
@@ -1002,6 +1020,7 @@ function frame(){
   tick(Math.min(clock.getDelta(),0.05), clock.elapsedTime);
 }
 function tick(dt,t){
+  if(paused){ composer.render(); return; } // frozen frame; nothing advances
   frames++; simT+=dt; if(t==null)t=simT;
   if(running){ timeLeft-=dt; if(timeLeft<=0){timeLeft=0;endGame();} }
 
@@ -1062,7 +1081,7 @@ function tick(dt,t){
   for(const d of DOMAINS){ const v=vehicles[d]; const el=domEls[d];
     const s=signals[d].find(s=>!s.dead);
     if(s){ const dz=Math.max(0,Math.round(s.z-v.z));
-      subEls[d].innerHTML='<b>◈ INCOMING · </b>'+dz+'m · '+Math.ceil(s.life)+'s';
+      subEls[d].innerHTML='<b>◈ INCOMING · </b>'+dz+'m · '+Math.max(0,Math.floor(s.life))+'s'; // floor: the display reaches 0 before the signal dies
       lifeEls[d].style.width=Math.max(0,Math.min(100,(s.life/s.maxLife)*100))+'%';
       el.classList.add('live'); el.classList.toggle('urgent', s.life<5); }
     else { subEls[d].textContent='— watching —'; lifeEls[d].style.width='0%'; el.classList.remove('live'); el.classList.remove('urgent'); }
@@ -1178,7 +1197,9 @@ function resetGame(){ for(const d of DOMAINS){ for(const s of signals[d]) if(!s.
   for(const d of DOMAINS){ Object.assign(vehicles[d],st[d]); vehicles[d].steer=0; vehicles[d].roll=0; }
   pipeline=0;caught=0;timeLeft=90;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; warmlist.innerHTML=''; wCount.textContent='0';
   setActive('road'); updateHUD(); }
-function startGame(){ initAudio(); resetGame(); startCard.classList.add('hidden'); endCard.classList.add('hidden'); running=true; musicOn(true); musicFor(active); }
+function startGame(){ initAudio(); resetGame(); startCard.classList.add('hidden'); endCard.classList.add('hidden');
+  paused=false; document.getElementById('pausedOv').classList.add('hidden');
+  running=true; if(actx&&actx.state==='suspended') actx.resume(); musicOn(true); musicFor(active); }
 function endGame(){ if(ended)return; ended=true; running=false; musicOn(false);
   document.getElementById('eCaught').textContent=caught+'/'+totalSpawned; document.getElementById('ePipe').textContent='$'+pipeline.toLocaleString();
   document.getElementById('eChannels').textContent='4';
@@ -1191,6 +1212,8 @@ function endGame(){ if(ended)return; ended=true; running=false; musicOn(false);
 
 document.getElementById('startBtn').addEventListener('click',startGame);
 document.getElementById('replayBtn').addEventListener('click',startGame);
+document.getElementById('resumeBtn').addEventListener('click',togglePause);
+document.querySelector('.stat.time').addEventListener('click',()=>{ if(running) togglePause(); });
 document.getElementById('capBtn').addEventListener('click',()=>{ const n=capName.value.trim(),em=capEmail.value.trim(),note=document.getElementById('capNote');
   if(!em||em.indexOf('@')<1){note.textContent='Add a work email and we’ll set up your live demo.';note.style.color='#F9AC24';return;}
   note.style.color='#F9AC24'; note.textContent='Got it'+(n?', '+n:'')+'. We’ll reach out to schedule your live demo. (Prototype: wire this to ChamPortal on go-live.)'; capBtn.textContent='Requested ✓'; });
