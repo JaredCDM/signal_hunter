@@ -172,17 +172,17 @@
     .sysline{display:none;} #warm{display:none;}
     .logo-top{width:118px;height:17px;}
     #stats{gap:5px;} .stat{padding:4px 9px;} .stat .v{font-size:17px;}
-    /* radar chips collapse into a slim strip under the stats — the view stays clear;
-       only the LIVE chip expands to show its category + countdown */
-    #domains{left:12px;right:12px;top:calc(3.2vh + 94px);width:auto;max-width:none;flex-direction:row;gap:5px;}
-    .dom{flex:1;padding:5px 5px 7px;min-width:0;}
-    .dom.live{transform:none;flex:1.7;}
-    .dom .nm{font-size:9px;letter-spacing:.8px;}
+    /* stats centered above a 2×2 radar grid — every chip shows its full text at all times */
+    #stats{left:12px;right:12px;justify-content:center;}
+    #domains{left:12px;right:12px;top:calc(3.2vh + 94px);width:auto;max-width:none;flex-flow:row wrap;gap:5px;}
+    .dom{flex:1 1 calc(50% - 3px);min-width:0;padding:5px 8px 8px;}
+    .dom.live{transform:none;}
+    .dom .nm{font-size:10px;letter-spacing:.8px;}
     .dom .key{font-size:8px;padding:0 3px;}
-    .dom .cat{display:none;}
-    .dom.live .cat{display:block;font-size:6.6px;letter-spacing:.3px;white-space:nowrap;overflow:hidden;}
-    .dom .sub{display:none;}
-    .dom.live .sub{display:block;font-size:7.6px;white-space:nowrap;overflow:hidden;}
+    .dom .cat{display:block;font-size:7px;letter-spacing:.4px;white-space:nowrap;overflow:hidden;}
+    .dom.live .cat{font-size:7px;}
+    .dom .sub{display:block;font-size:8.5px;white-space:nowrap;overflow:hidden;}
+    .dom .sub b{display:none;} /* drop the ◈ INCOMING prefix — distance + countdown fit fully */
     #alert{top:22%;padding:8px 16px 10px;max-width:86vw;}
     #alert .a-type{font-size:21px;}
     #alert .a-mode{font-size:9px;letter-spacing:1.2px;}
@@ -202,7 +202,7 @@
 <div id="topbar">
   <div class="brand">
     <span class="champlogo logo-top"></span>
-    <span class="product">SIGNAL</span>
+    <span class="product">SIGNAL HUNTER</span>
   </div>
   <div class="sysline">OMNICHANNEL INTENT SWEEP <span class="dot">●</span> THE WATCHER</div>
 </div>
@@ -823,9 +823,10 @@ let active='road';
 
 // ================= SIGNALS =================
 const signals={sky:[],ocean:[],road:[],rail:[]};
-const beamMat=new THREE.MeshBasicMaterial({color:COL.amber,transparent:true,opacity:0.32,blending:THREE.AdditiveBlending,depthWrite:false});
-const coreMat=new THREE.MeshBasicMaterial({color:0xFFBE52});
-const ringMat=new THREE.MeshBasicMaterial({color:COL.amber,transparent:true,opacity:0.6,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,depthWrite:false});
+// signal markers are gameplay UI — fog:false so they stay legible at range instead of fading into the haze
+const beamMat=new THREE.MeshBasicMaterial({color:COL.amber,transparent:true,opacity:0.32,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});
+const coreMat=new THREE.MeshBasicMaterial({color:0xFFBE52,fog:false});
+const ringMat=new THREE.MeshBasicMaterial({color:COL.amber,transparent:true,opacity:0.6,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,depthWrite:false,fog:false});
 
 function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   const isSky=dom==='sky';
@@ -840,10 +841,15 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   const p=running?1-timeLeft/90:0;
   const v=vehicles[dom]; const z = v.z + Math.min(560, v.speed*rand(lerp(6.2,4.2,p),lerp(7.5,5.4,p)));
   // core
-  const core=new THREE.Mesh(new THREE.SphereGeometry(1.05,16,16),coreMat); grp.add(core);
+  const core=new THREE.Mesh(new THREE.SphereGeometry(isSky?1.8:1.05,16,16),coreMat); grp.add(core);
   // beam
   if(!isSky){ const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.9,2.2,46,14,1,true),beamMat); beam.position.y=23-y; grp.add(beam);
     grp.userData.beam=beam; }
+  else { // sky signals need contrast against a bright sky: strong vertical beam + dark halo behind the core
+    const bm=beamMat.clone(); bm.opacity=0.5;
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.4,110,12,1,true),bm); grp.add(beam);
+    const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:puffTex,color:0x141414,transparent:true,opacity:0.6,depthWrite:false,fog:false}));
+    halo.scale.set(14,14,1); grp.add(halo); }
   // rings
   const rings=[]; for(let i=0;i<3;i++){ const r=new THREE.Mesh(new THREE.RingGeometry(2,2.5,32),ringMat.clone()); r.rotation.x=-Math.PI/2;
     if(!isSky) r.position.y=0.35; // hover the rings off the corridor surface — flush planes z-fight
@@ -851,7 +857,8 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   grp.userData.rings=rings; grp.userData.core=core;
   grp.position.set(x,y,z);
   scene.add(grp);
-  const life=(z-v.z)/v.speed + lerp(rand(3.2,4.5),rand(1.1,1.8),p);
+  // life = exact time until the vehicle passes the signal (+catch-window slack) — the countdown never lies
+  const life=(z-v.z)/v.speed + 0.8;
   return {dom,grp,x,y,z,life,maxLife:life,lead:genLead(),dead:false,caught:false,t:rand(0,10)};
 }
 // signals dealt from a shuffled bag (fair mode mix, max one per mode);
@@ -1013,13 +1020,15 @@ function tick(dt,t){
     }
     if(d==='sky'){ v.y += alt*34*dt; v.y=Math.max(L.alt[0],Math.min(L.alt[1],v.y)); }
     // roll/bank into the turn
-    const targetRoll = steer*(d==='sky'?0.5:0.16); v.roll += (targetRoll-v.roll)*Math.min(1,dt*6);
+    // planes bank into turns; ships heel gently; trucks DON'T tilt — they yaw with a hint of outward body sway
+    const targetRoll = steer*(d==='sky'?0.5 : d==='ocean'?0.14 : -0.03);
+    v.roll += (targetRoll-v.roll)*Math.min(1,dt*6);
     // the ship rides the Gerstner swells — height from the sea, roll/pitch from the local slope
     const yy = d==='ocean'? 0.55 + seaY(v.x,v.z)*0.92 : v.y;
     v.mesh.position.set(v.x, yy, v.z);
     // models are authored facing +Z (forward); yaw slightly into the steer
     v.mesh.rotation.z=v.roll + (d==='ocean'?(seaY(v.x+5,v.z)-seaY(v.x-5,v.z))*0.045:0);
-    v.mesh.rotation.y=steer*0.12;
+    v.mesh.rotation.y=steer*(d==='road'?0.24:0.12); // the truck visibly steers its nose instead
     if(d==='ocean') v.mesh.rotation.x=(seaY(v.x,v.z+9)-seaY(v.x,v.z-9))*0.03;
     if(d==='sky') v.mesh.rotation.x = -alt*0.16;
   }
@@ -1053,7 +1062,7 @@ function tick(dt,t){
   for(const d of DOMAINS){ const v=vehicles[d]; const el=domEls[d];
     const s=signals[d].find(s=>!s.dead);
     if(s){ const dz=Math.max(0,Math.round(s.z-v.z));
-      subEls[d].innerHTML='<b>◈ INCOMING</b> · '+dz+'m · '+Math.ceil(s.life)+'s';
+      subEls[d].innerHTML='<b>◈ INCOMING · </b>'+dz+'m · '+Math.ceil(s.life)+'s';
       lifeEls[d].style.width=Math.max(0,Math.min(100,(s.life/s.maxLife)*100))+'%';
       el.classList.add('live'); el.classList.toggle('urgent', s.life<5); }
     else { subEls[d].textContent='— watching —'; lifeEls[d].style.width='0%'; el.classList.remove('live'); el.classList.remove('urgent'); }
