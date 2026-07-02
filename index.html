@@ -908,6 +908,28 @@ let active='road';
     stage.position.copy(old.position); vehicles.sky.mesh=stage;
   }); }
 
+// ---------- Champion container ship (Jared's GLB, pre-branded textures) ----------
+new GLTFLoader().loadAsync('assets/champion-ship.glb').catch(()=>null).then(gltf=>{
+  if(!gltf) return;                                        // procedural ship stays as fallback
+  const ship=gltf.scene;
+  ship.traverse(o=>{ if(o.isMesh){ o.castShadow=true;
+    if(o.material && o.material.envMapIntensity===1) o.material.envMapIntensity=1.0; } });
+  const stage=new THREE.Group(); stage.add(ship); scene.add(stage); stage.updateMatrixWorld(true);
+  ship.rotation.y=-Math.PI/2;                              // hull runs along +X in the file — yaw onto +Z
+  stage.updateMatrixWorld(true);
+  const size=new THREE.Box3().setFromObject(ship).getSize(new THREE.Vector3());
+  ship.scale.setScalar(42/size.z); stage.updateMatrixWorld(true);
+  const bb=new THREE.Box3().setFromObject(ship), c=bb.getCenter(new THREE.Vector3());
+  ship.position.x-=c.x; ship.position.z-=c.z;
+  ship.position.y-=bb.min.y+(bb.max.y-bb.min.y)*0.2;       // waterline: ~20% of the hull rides below the origin
+  stage.updateMatrixWorld(true);
+  stage.userData.blink=[];
+  const bb2=new THREE.Box3().setFromObject(stage);
+  blinker(stage,0,bb2.max.y+0.25,-14,0xffffff,3,0);        // masthead strobe
+  const old=vehicles.ocean.mesh; scene.remove(old);
+  stage.position.copy(old.position); vehicles.ocean.mesh=stage;
+});
+
 // ================= SIGNALS =================
 const signals={sky:[],ocean:[],road:[],rail:[]};
 // signal markers are gameplay UI — fog:false so they stay legible at range instead of fading into the haze
@@ -981,8 +1003,8 @@ function puff(x,y,z,col,scale,life,grow,op,wide){ if(parts.length>240) return;
 let emitT=0;
 function emitParticles(dt){ emitT+=dt; if(emitT<0.07) return; emitT=0;
   const tr=vehicles.road;  puff(tr.x+rand(-1.7,1.7),0.5,tr.z-9.8,0xC9A46A,rand(2,3.4),rand(0.7,1.1),1.7,0.2);
-  const sh=vehicles.ocean; puff(sh.x+rand(-2.4,2.4),seaY(sh.x,sh.z-18)+0.5,sh.z-18-rand(0,7),0xEAF2EF,rand(3,5.5),rand(1.7,2.6),1.1,0.5,2.2);
-                           puff(sh.x+rand(-3.4,3.4),seaY(sh.x,sh.z+17)+0.45,sh.z+17.5,0xEAF2EF,rand(1.8,3),0.8,1.6,0.45,1.6);
+  const sh=vehicles.ocean; puff(sh.x+rand(-2.4,2.4),seaY(sh.x,sh.z-21)+0.5,sh.z-21-rand(0,7),0xEAF2EF,rand(3,5.5),rand(1.7,2.6),1.1,0.5,2.2);
+                           puff(sh.x+rand(-3.4,3.4),seaY(sh.x,sh.z+20)+0.45,sh.z+20.5,0xEAF2EF,rand(1.8,3),0.8,1.6,0.45,1.6);
   const pl=vehicles.sky;   puff(pl.x,pl.y-0.5,pl.z-6.5,0xFFF6E8,1.2,rand(1.3,1.9),2.0,0.16);
   const tn=vehicles.rail;  puff(tn.x+rand(-0.6,0.6),6.2,tn.z+5.6,0x555a60,rand(0.9,1.4),rand(1.2,1.8),1.6,0.16); }
 function updateParticles(dt){ for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.t+=dt; const k=p.t/p.life;
