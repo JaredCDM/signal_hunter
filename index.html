@@ -946,7 +946,7 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   scene.add(grp);
   // life ends at the exact moment the catch window closes (18m behind the dot) — the countdown never lies
   const life=(z-v.z+18)/v.speed;
-  return {dom,grp,x,y,z,life,maxLife:life,lead:genLead(),val:Math.round(rand(64,96))*130,dead:false,caught:false,t:rand(0,10)};
+  return {dom,grp,x,y,z,life,maxLife:life,dz0:z-v.z,lead:genLead(),val:Math.round(rand(64,96))*130,dead:false,caught:false,t:rand(0,10)};
 }
 // signals dealt from a shuffled bag (fair mode mix, max one per mode);
 // cadence and concurrency ramp up as the hunt progresses
@@ -1072,7 +1072,7 @@ const wCount=document.getElementById('wCount'),warmlist=document.getElementById(
 const domEls={}; document.querySelectorAll('.dom').forEach(el=>domEls[el.dataset.dom]=el);
 const subEls={sky:subSky,ocean:subOcean,road:subRoad,rail:subRail};
 const lifeEls={sky:lifeSky,ocean:lifeOcean,road:lifeRoad,rail:lifeRail};
-let pipeline=0,missedPipe=0,caught=0,timeLeft=90,running=false,ended=false,paused=false;
+let pipeline=0,missedPipe=0,caught=0,missed=0,timeLeft=90,running=false,ended=false,paused=false;
 function togglePause(){ if(!running) return; paused=!paused;
   document.getElementById('pausedOv').classList.toggle('hidden',!paused);
   if(actx){ if(paused) actx.suspend(); else actx.resume(); } } // buffers freeze mid-note and resume in place
@@ -1080,7 +1080,10 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden && running
 
 function setActive(d){ if(paused) return; const changed=d!==active; active=d; for(const k in domEls) domEls[k].classList.toggle('active',k===d);
   if(changed && actx && running) musicFor(d); }
-function updateHUD(){ hPipe.textContent='$'+pipeline.toLocaleString(); hCaught.textContent=totalSpawned?caught+'/'+totalSpawned:caught; hTime.textContent=Math.ceil(timeLeft); hTime.classList.toggle('low',timeLeft<=15); }
+function updateHUD(){ hPipe.textContent='$'+pipeline.toLocaleString();
+  const resolved=caught+missed; // only signals that actually came and went — live ones don't count against you
+  hCaught.textContent=resolved?caught+'/'+resolved:caught;
+  hTime.textContent=Math.ceil(timeLeft); hTime.classList.toggle('low',timeLeft<=15); }
 function addWarm(lead,score){ const d=document.createElement('div'); d.className='wlead'; d.innerHTML='<div class="nm">'+lead.name+' · '+score+'</div><div class="ti">'+lead.title+' · '+lead.co+'</div>'; warmlist.insertBefore(d,warmlist.firstChild); while(warmlist.children.length>6) warmlist.removeChild(warmlist.lastChild); wCount.textContent=caught; }
 
 const alertEl=document.getElementById('alert'),alertType=document.getElementById('alertType'),alertMode=document.getElementById('alertMode');
@@ -1174,7 +1177,7 @@ function tick(dt,t){
           cueCatch(); fovPunch=5.5; shake=0.5; killSignal(s); }
       }
       if(!s.caught && (s.life<=0 || s.z - v.z < -40)){ // cold / passed
-        if(running){ missedPipe+=s.val; cueMiss(); flash('SIGNAL LOST','#E4572E'); }
+        if(running){ missed++; missedPipe+=s.val; cueMiss(); flash('SIGNAL LOST','#E4572E'); }
         killSignal(s); }
     }
     signals[d]=arr.filter(s=>!s.dead);
@@ -1189,7 +1192,7 @@ function tick(dt,t){
     const s=signals[d].find(s=>!s.dead);
     if(s){ const dz=Math.max(0,Math.round(s.z-v.z));
       subEls[d].innerHTML='<b>◈ INCOMING · </b>'+dz+'m · '+Math.max(0,Math.floor(s.life))+'s'; // floor: the display reaches 0 before the signal dies
-      lifeEls[d].style.width=Math.max(0,Math.min(100,(s.life/s.maxLife)*100))+'%';
+      lifeEls[d].style.width=Math.max(0,Math.min(100,((s.z-v.z)/s.dz0)*100))+'%'; // bar = distance-to-pass; empty exactly as the dot reaches you
       el.classList.add('live'); el.classList.toggle('urgent', s.life<5); }
     else { subEls[d].textContent='— watching —'; lifeEls[d].style.width='0%'; el.classList.remove('live'); el.classList.remove('urgent'); }
   }
@@ -1303,16 +1306,16 @@ const startCard=document.getElementById('startCard'),endCard=document.getElement
 function resetGame(){ for(const d of DOMAINS){ for(const s of signals[d]) if(!s.dead) killSignal(s); signals[d]=[]; }
   const st={sky:{x:0,y:60,z:40},ocean:{x:LANES.ocean.x,y:0.6,z:20},road:{x:LANES.road.x,y:0.3,z:60},rail:{x:LANES.rail.x,y:1.0,z:30}};
   for(const d of DOMAINS){ Object.assign(vehicles[d],st[d]); vehicles[d].steer=0; vehicles[d].roll=0; }
-  pipeline=0;missedPipe=0;caught=0;timeLeft=90;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; warmlist.innerHTML=''; wCount.textContent='0';
+  pipeline=0;missedPipe=0;caught=0;missed=0;timeLeft=90;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; warmlist.innerHTML=''; wCount.textContent='0';
   setActive('road'); updateHUD(); }
 function startGame(){ initAudio(); resetGame(); startCard.classList.add('hidden'); endCard.classList.add('hidden');
   paused=false; document.getElementById('pausedOv').classList.add('hidden');
   running=true; if(actx&&actx.state==='suspended') actx.resume(); musicOn(true); musicFor(active); }
 function endGame(){ if(ended)return; ended=true; running=false; musicOn(false);
-  document.getElementById('eMissed').textContent=totalSpawned-caught;
+  document.getElementById('eMissed').textContent=missed;
   document.getElementById('ePipeMissed').textContent='$'+missedPipe.toLocaleString();
   const head=document.getElementById('endHead'),kick=document.getElementById('endKicker'),b1=document.getElementById('endBody1');
-  const rate=caught/Math.max(1,totalSpawned);
+  const rate=caught/Math.max(1,caught+missed);
   kick.textContent = rate>=0.99 ? 'Hunt complete · flawless read' : 'Hunt complete';
   if(rate>=0.99){ head.innerHTML='EVERY SIGNAL <span class="am">CAPTURED.</span>';
     b1.textContent='You captured every signal by hand — at full sprint, across four modes. Nobody can keep that up forever.'; }
