@@ -90,10 +90,11 @@
   #pauseBtn:active{border-color:var(--amber);color:var(--amber);}
 
   /* ---- domain compass (right) ---- */
-  #domains{position:absolute;top:calc(3.2vh + 52px);right:20px;z-index:8;display:flex;flex-direction:column;gap:11px;width:250px;}
-  .dom{background:rgba(20,20,20,0.5);border:1px solid var(--line);padding:12px 15px;backdrop-filter:blur(3px);
+  /* desktop: mode boxes run along the BOTTOM in key order 1-4; big Podium numbers = the keys */
+  #domains{position:absolute;bottom:calc(3.2vh + 34px);top:auto;left:0;right:0;z-index:8;display:flex;flex-direction:row;justify-content:center;gap:14px;width:auto;}
+  .dom{background:rgba(20,20,20,0.5);border:1px solid var(--line);padding:12px 58px 12px 15px;backdrop-filter:blur(3px);
     cursor:pointer;transition:border-color .2s, background .2s, transform .2s, opacity .2s;position:relative;overflow:hidden;
-    opacity:.78;transform-origin:right center;}
+    opacity:.78;transform-origin:center bottom;width:238px;}
   .dom.active,.dom.live{opacity:1;}
   .dom.live{transform:scale(1.06);}
   .dom.live .cat{font-size:12.5px;}
@@ -102,7 +103,8 @@
   @keyframes urgent{50%{background:rgba(228,87,46,0.14);}}
   .dom .row{display:flex;align-items:center;justify-content:space-between;}
   .dom .nm{font-size:14px;letter-spacing:1.8px;font-weight:700;color:var(--cream);text-transform:uppercase;}
-  .dom .key{font-size:11px;color:var(--grey-2);border:1px solid var(--line);padding:1px 6px;border-radius:2px;}
+  .dom .key{position:absolute;right:14px;top:6px;font-family:var(--display);font-style:italic;font-size:40px;line-height:1;
+    color:var(--amber);border:none;padding:0;text-shadow:0 2px 10px rgba(0,0,0,.45);}
   .dom .cat{font-size:11px;letter-spacing:1.4px;color:var(--grey-2);margin-top:6px;text-transform:uppercase;font-weight:700;}
   .dom .sub{font-size:12px;color:var(--grey-2);margin-top:5px;letter-spacing:.4px;}
   .dom .sub b{color:var(--amber);font-weight:700;}
@@ -116,7 +118,7 @@
   .dom.urgent .bar-life{background:var(--red);}
 
   /* ---- warm list ---- */
-  #warm{position:absolute;bottom:calc(3.2vh + 84px);left:20px;z-index:8;width:200px;pointer-events:none;}
+  #warm{position:absolute;top:calc(3.2vh + 52px);right:20px;z-index:8;width:210px;pointer-events:none;}
   #warm h4{font-size:9px;letter-spacing:2.5px;color:var(--grey-2);text-transform:uppercase;margin-bottom:6px;text-align:left;}
   #warm h4 b{color:var(--amber);}
   .wlead{background:rgba(20,20,20,0.42);border-left:2px solid var(--amber);padding:5px 9px;margin-bottom:4px;text-align:left;
@@ -221,7 +223,7 @@
     /* start-screen legend: equal 2×2 boxes, no keyboard hint on touch */
     .legend{grid-template-columns:repeat(2,1fr);max-width:340px;}
     .lg .kk{display:none;}
-    .dom{flex:1;min-width:0;padding:6px 3px 8px;text-align:center;}
+    .dom{flex:1;min-width:0;width:auto;padding:6px 3px 8px;text-align:center;}
     .dom.live{transform:none;}
     .dom .row{justify-content:center;gap:4px;}
     .dom .key{display:none;}
@@ -266,9 +268,9 @@
 
 <div id="domains">
   <div class="dom" data-dom="sky"><div class="row"><span class="nm">Plane</span><span class="key">1</span></div><div class="cat">Ad Engagement</div><div class="sub" id="subSky">— watching —</div><div class="bar-life" id="lifeSky"></div></div>
-  <div class="dom" data-dom="ocean"><div class="row"><span class="nm">Ship</span><span class="key">2</span></div><div class="cat">Email Engagement</div><div class="sub" id="subOcean">— watching —</div><div class="bar-life" id="lifeOcean"></div></div>
+  <div class="dom" data-dom="rail"><div class="row"><span class="nm">Train</span><span class="key">2</span></div><div class="cat">News Signal</div><div class="sub" id="subRail">— watching —</div><div class="bar-life" id="lifeRail"></div></div>
   <div class="dom" data-dom="road"><div class="row"><span class="nm">Truck</span><span class="key">3</span></div><div class="cat">Website Engagement</div><div class="sub" id="subRoad">— watching —</div><div class="bar-life" id="lifeRoad"></div></div>
-  <div class="dom" data-dom="rail"><div class="row"><span class="nm">Train</span><span class="key">4</span></div><div class="cat">News Signal</div><div class="sub" id="subRail">— watching —</div><div class="bar-life" id="lifeRail"></div></div>
+  <div class="dom" data-dom="ocean"><div class="row"><span class="nm">Ship</span><span class="key">4</span></div><div class="cat">Email Engagement</div><div class="sub" id="subOcean">— watching —</div><div class="bar-life" id="lifeOcean"></div></div>
 </div>
 
 <div id="warm"><h4>Warm list · <b id="wCount">0</b></h4><div id="warmlist"></div></div>
@@ -294,9 +296,9 @@
     <p class="lede">Roam across <b>land, air, and sea</b> to bring them in. Each mode hunts one type of signal, and you can only pilot one at a time. Read where the signal is firing, switch to the right mode, and capture the signal before it goes cold.</p>
     <div class="legend">
       <div class="lg"><div class="h">Plane</div><div class="k">Ad engagement</div><div class="kk">press 1</div></div>
-      <div class="lg"><div class="h">Ship</div><div class="k">Email engagement</div><div class="kk">press 2</div></div>
+      <div class="lg"><div class="h">Train</div><div class="k">News signals</div><div class="kk">press 2</div></div>
       <div class="lg"><div class="h">Truck</div><div class="k">Website engagement</div><div class="kk">press 3</div></div>
-      <div class="lg"><div class="h">Train</div><div class="k">News signals</div><div class="kk">press 4</div></div>
+      <div class="lg"><div class="h">Ship</div><div class="k">Email engagement</div><div class="kk">press 4</div></div>
     </div>
     <button class="btn" id="startBtn">Start signal hunting →</button>
   </div>
@@ -1198,7 +1200,7 @@ function updateHUD(){ hPipe.textContent='$'+pipeline.toLocaleString();
 function addWarm(lead,score){ const d=document.createElement('div'); d.className='wlead'; d.innerHTML='<div class="nm">'+lead.name+' · '+score+'</div><div class="ti">'+lead.title+' · '+lead.co+'</div>'; warmlist.insertBefore(d,warmlist.firstChild); while(warmlist.children.length>6) warmlist.removeChild(warmlist.lastChild); wCount.textContent=caught; }
 
 const alertEl=document.getElementById('alert'),alertType=document.getElementById('alertType'),alertMode=document.getElementById('alertMode');
-const MODE_NAME={sky:['PLANE','1'],ocean:['SHIP','2'],road:['TRUCK','3'],rail:['TRAIN','4']};
+const MODE_NAME={sky:['PLANE','1'],rail:['TRAIN','2'],road:['TRUCK','3'],ocean:['SHIP','4']};
 let alertT;
 function showAlert(d){ alertType.textContent=CAT[d].toUpperCase();
   const mob=matchMedia('(max-width:760px)').matches; // no keyboard on mobile — they tap the chip
@@ -1214,8 +1216,8 @@ function flash(msg,color){ flashEl.textContent=msg; flashEl.style.color=color; f
 const keys={};
 addEventListener('keydown',e=>{ keys[e.code]=true;
   if(e.code==='Space' && !e.repeat) togglePause();
-  if(e.code==='Digit1')setActive('sky'); if(e.code==='Digit2')setActive('ocean');
-  if(e.code==='Digit3')setActive('road'); if(e.code==='Digit4')setActive('rail');
+  if(e.code==='Digit1')setActive('sky'); if(e.code==='Digit2')setActive('rail');
+  if(e.code==='Digit3')setActive('road'); if(e.code==='Digit4')setActive('ocean');
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code))e.preventDefault();
 });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
