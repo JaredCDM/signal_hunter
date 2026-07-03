@@ -205,6 +205,10 @@
   #endStats .es{background:rgba(15,13,11,0.9);padding:16px 10px;}
   #endStats .es .v{font-family:var(--display);font-style:italic;font-size:clamp(26px,6vw,40px);line-height:1;color:var(--red);} /* missed = loss, reads red */
   #endStats .es.mut .v{color:var(--cream);}
+  #endStats .es.streakbox .v{background:linear-gradient(100deg,#9a6f1f 0%,#F9AC24 22%,#FFF3CE 50%,#F9AC24 78%,#9a6f1f 100%);
+    background-size:220% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
+    animation:goldshimmer 2.6s linear infinite;}
+  @keyframes goldshimmer{to{background-position:-220% center;}}
   #endStats .es .k{font-size:9px;letter-spacing:2px;color:var(--grey-2);margin-top:6px;text-transform:uppercase;}
   .handoff{font-size:13.5px;line-height:1.6;color:var(--grey-2);max-width:470px;margin:0 auto 12px;}
   .handoff.last{margin-bottom:20px;}
@@ -338,7 +342,7 @@
     <h1 id="endHead">SIGNAL <span class="am">CAUGHT.</span></h1>
     <div id="endStats">
       <div class="es"><div class="v" id="eMissed">0</div><div class="k">Signals missed</div></div>
-      <div class="es"><div class="v" id="ePipeMissed">$0</div><div class="k">Pipeline missed</div></div>
+      <div class="es" id="esPipe"><div class="v" id="ePipeMissed">$0</div><div class="k" id="ePipeK">Pipeline missed</div></div>
     </div>
     <p class="handoff" id="endBody1">You chased four types of intent signals manually, leaving a lot on the table.</p>
     <p class="handoff">Champion's system automatically resolves intent signals to named contacts and accounts, <b>so you never miss a thing.</b></p>
@@ -1540,10 +1544,15 @@ function endGame(){ if(ended)return; ended=true; running=false; paused=false;
   document.getElementById('pausedOv').classList.add('hidden');
   if(actx&&actx.state==='suspended') actx.resume(); musicOn(false);
   document.getElementById('eMissed').textContent=missed;
-  document.getElementById('ePipeMissed').textContent='$'+missedPipe.toLocaleString();
+  const esPipe=document.getElementById('esPipe');
+  if(freePlay){ document.getElementById('ePipeMissed').textContent=bestStreak; document.getElementById('ePipeK').textContent='Best streak'; esPipe.classList.add('streakbox'); }
+  else { document.getElementById('ePipeMissed').textContent='$'+missedPipe.toLocaleString(); document.getElementById('ePipeK').textContent='Pipeline missed'; esPipe.classList.remove('streakbox'); }
+  // end-card buttons: primary replays the current mode, secondary switches
+  document.getElementById('replayBtn').textContent = freePlay?'Free Play Again':'Play again';
+  document.getElementById('freeBtn').textContent   = freePlay?'Switch to Timed Run':'Free play →';
   const head=document.getElementById('endHead'),kick=document.getElementById('endKicker'),b1=document.getElementById('endBody1');
   const rate=caught/Math.max(1,caught+missed);
-  kick.textContent = freePlay ? ('Free play · best streak '+bestStreak) : (rate>=0.99 ? 'Hunt complete · flawless read' : 'Hunt complete');
+  kick.textContent = freePlay ? 'Free play · session ended' : (rate>=0.99 ? 'Hunt complete · flawless read' : 'Hunt complete');
   if(rate>=0.99){ head.innerHTML='EVERY SIGNAL <span class="am">CAPTURED.</span>';
     b1.textContent='You captured every signal by hand — at full sprint, across four modes. Nobody can keep that up forever.'; }
   else { head.innerHTML='YOU LEFT A LOT ON THE <span class="am">TABLE.</span>';
@@ -1551,10 +1560,10 @@ function endGame(){ if(ended)return; ended=true; running=false; paused=false;
   endCard.classList.remove('hidden'); }
 
 document.getElementById('startBtn').addEventListener('click',()=>startGame(false));       // title = timed
-document.getElementById('replayBtn').addEventListener('click',()=>startGame(false));      // Play again = timed
+document.getElementById('replayBtn').addEventListener('click',()=>startGame(freePlay));    // end card primary: replay current mode
 document.getElementById('resumeBtn').addEventListener('click',togglePause);
 document.getElementById('startOverBtn').addEventListener('click',()=>startGame(false));   // Start over / Switch to Timed Run
-document.getElementById('freeBtn').addEventListener('click',()=>startGame(true));         // end card → Free play
+document.getElementById('freeBtn').addEventListener('click',()=>startGame(!freePlay));     // end card secondary: switch mode
 document.getElementById('modeBtn').addEventListener('click',()=>{ if(freePlay) endGame(); else startGame(true); }); // pause: End run / Free play
 document.querySelector('.stat.time').addEventListener('click',()=>{ if(running) togglePause(); });
 document.getElementById('pauseBtn').addEventListener('click',()=>{ if(running) togglePause(); });
