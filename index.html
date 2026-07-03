@@ -75,21 +75,21 @@
   #pauseBtn:active{border-color:var(--amber);color:var(--amber);}
 
   /* ---- domain compass (right) ---- */
-  #domains{position:absolute;top:calc(3.2vh + 52px);right:20px;z-index:8;display:flex;flex-direction:column;gap:8px;width:190px;}
-  .dom{background:rgba(20,20,20,0.5);border:1px solid var(--line);padding:8px 11px;backdrop-filter:blur(3px);
+  #domains{position:absolute;top:calc(3.2vh + 52px);right:20px;z-index:8;display:flex;flex-direction:column;gap:11px;width:250px;}
+  .dom{background:rgba(20,20,20,0.5);border:1px solid var(--line);padding:12px 15px;backdrop-filter:blur(3px);
     cursor:pointer;transition:border-color .2s, background .2s, transform .2s, opacity .2s;position:relative;overflow:hidden;
     opacity:.78;transform-origin:right center;}
   .dom.active,.dom.live{opacity:1;}
   .dom.live{transform:scale(1.06);}
-  .dom.live .cat{font-size:10.5px;}
+  .dom.live .cat{font-size:12.5px;}
   .dom.active{border-color:var(--amber);background:rgba(249,172,36,0.10);}
   .dom.urgent:not(.active){border-color:var(--red);animation:urgent 0.9s ease-in-out infinite;}
   @keyframes urgent{50%{background:rgba(228,87,46,0.14);}}
   .dom .row{display:flex;align-items:center;justify-content:space-between;}
-  .dom .nm{font-size:11px;letter-spacing:1.5px;font-weight:700;color:var(--cream);text-transform:uppercase;}
-  .dom .key{font-size:9px;color:var(--grey-2);border:1px solid var(--line);padding:0 4px;border-radius:2px;}
-  .dom .cat{font-size:9px;letter-spacing:1.2px;color:var(--grey-2);margin-top:4px;text-transform:uppercase;font-weight:700;}
-  .dom .sub{font-size:9.5px;color:var(--grey-2);margin-top:3px;letter-spacing:.4px;}
+  .dom .nm{font-size:14px;letter-spacing:1.8px;font-weight:700;color:var(--cream);text-transform:uppercase;}
+  .dom .key{font-size:11px;color:var(--grey-2);border:1px solid var(--line);padding:1px 6px;border-radius:2px;}
+  .dom .cat{font-size:11px;letter-spacing:1.4px;color:var(--grey-2);margin-top:6px;text-transform:uppercase;font-weight:700;}
+  .dom .sub{font-size:12px;color:var(--grey-2);margin-top:5px;letter-spacing:.4px;}
   .dom .sub b{color:var(--amber);font-weight:700;}
   .dom.live{border-color:rgba(249,172,36,0.55);}
   .dom.live .cat{color:var(--amber);}
@@ -101,12 +101,12 @@
   .dom.urgent .bar-life{background:var(--red);}
 
   /* ---- warm list ---- */
-  #warm{position:absolute;bottom:calc(3.2vh + 84px);right:20px;z-index:8;width:200px;pointer-events:none;}
-  #warm h4{font-size:9px;letter-spacing:2.5px;color:var(--grey-2);text-transform:uppercase;margin-bottom:6px;text-align:right;}
+  #warm{position:absolute;bottom:calc(3.2vh + 84px);left:20px;z-index:8;width:200px;pointer-events:none;}
+  #warm h4{font-size:9px;letter-spacing:2.5px;color:var(--grey-2);text-transform:uppercase;margin-bottom:6px;text-align:left;}
   #warm h4 b{color:var(--amber);}
-  .wlead{background:rgba(20,20,20,0.42);border-right:2px solid var(--amber);padding:5px 9px;margin-bottom:4px;text-align:right;
+  .wlead{background:rgba(20,20,20,0.42);border-left:2px solid var(--amber);padding:5px 9px;margin-bottom:4px;text-align:left;
     animation:win .35s cubic-bezier(.2,.7,.2,1);}
-  @keyframes win{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:none;}}
+  @keyframes win{from{opacity:0;transform:translateX(-16px);}to{opacity:1;transform:none;}}
   .wlead .nm{font-size:11px;color:var(--cream);}
   .wlead .ti{font-size:9px;color:var(--grey-2);}
 
@@ -225,7 +225,6 @@
     <span class="champlogo logo-top"></span>
     <span class="product">SIGNAL HUNTER</span>
   </div>
-  <div class="sysline">OMNICHANNEL INTENT SWEEP <span class="dot">●</span> THE WATCHER</div>
 </div>
 
 <div id="stats">
@@ -946,14 +945,14 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   if(isSky){ const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:puffTex,color:0x120f0b,transparent:true,opacity:0.7,depthWrite:false,fog:false}));
     halo.scale.set(16,16,1); grp.add(halo); grp.userData.halo=halo; }
   // core + bright additive glow — pops against the warm environment
-  const glow=new THREE.Sprite(glowMat); glow.scale.set(isSky?12:7.5,isSky?12:7.5,1); grp.add(glow); grp.userData.glow=glow;
-  const core=new THREE.Mesh(new THREE.SphereGeometry(isSky?2.1:1.25,16,16),coreMat); grp.add(core);
-  // beam — always reaches the ground (≈y0), whatever the orb's altitude
-  if(!isSky){ const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.9,2.4,46,16,1,true),beamMat); beam.position.y=23-y; grp.add(beam);
-    grp.userData.beam=beam; }
-  else { // drop a searchlight beam from the high orb all the way down to the ground
-    const bh=y+8;                                                   // ground(≈0) up to just past the orb
-    const beam=new THREE.Mesh(new THREE.CylinderGeometry(1.1,3.0,bh,16,1,true),beamMat); beam.position.y=-y/2; grp.add(beam); }
+  const glow=new THREE.Sprite(glowMat); glow.scale.set(isSky?14:9,isSky?14:9,1); grp.add(glow); grp.userData.glow=glow;
+  const core=new THREE.Mesh(new THREE.SphereGeometry(isSky?2.6:1.6,16,16),coreMat); grp.add(core);
+  // beam — one continuous column of light from the ground up past the top of frame,
+  // whatever the orb's altitude (the orb sits somewhere along it)
+  const BEAM_TOP=560;                                              // world-Y the beam tops out at (well out of frame)
+  const beam=new THREE.Mesh(new THREE.CylinderGeometry(1.3,3.0,BEAM_TOP,18,1,true),beamMat);
+  beam.position.y=BEAM_TOP/2 - y;                                  // bottom at world 0 (ground), top at world BEAM_TOP
+  grp.add(beam);
   // rings
   const rings=[]; for(let i=0;i<3;i++){ const r=new THREE.Mesh(new THREE.RingGeometry(2,2.5,32),ringMat.clone()); r.rotation.x=-Math.PI/2;
     if(!isSky) r.position.y=0.35; // hover the rings off the corridor surface — flush planes z-fight
@@ -1207,7 +1206,7 @@ function tick(dt,t){
       for(const r of s.grp.userData.rings){ const ph=((s.t*0.6+r.ph)%1); const sc=1+ph*5.5; r.m.scale.set(sc,sc,sc); r.m.material.opacity=0.8*(1-ph); }
       const pulse=1+Math.sin(s.t*4)*0.12;
       s.grp.userData.core.scale.setScalar(pulse);
-      if(s.grp.userData.glow) s.grp.userData.glow.scale.setScalar((s.dom==='sky'?12:7.5)*pulse); // glow breathes with the core
+      if(s.grp.userData.glow) s.grp.userData.glow.scale.setScalar((s.dom==='sky'?14:9)*pulse); // glow breathes with the core
       if(s.grp.userData.halo){ const hd=s.z-vehicles[d].z; // contrast halo is for distance reads — fade it out up close
         s.grp.userData.halo.material.opacity=0.7*Math.min(1,Math.max(0,(hd-35)/120)); }
       // collect check for active vehicle
