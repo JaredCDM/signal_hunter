@@ -69,6 +69,10 @@
   .stat.money .v{color:var(--amber);}
   .stat.time .v.low{color:var(--red);}
   .stat.time{pointer-events:auto;cursor:pointer;} /* tap the clock to pause (mobile has no spacebar) */
+  #pauseBtn{display:none;position:absolute;top:calc(3.2vh + 10px);right:12px;z-index:9;width:40px;height:40px;
+    border-radius:50%;background:rgba(20,20,20,0.55);border:1px solid var(--line);color:var(--cream);
+    font-size:10px;letter-spacing:2px;align-items:center;justify-content:center;user-select:none;cursor:pointer;}
+  #pauseBtn:active{border-color:var(--amber);color:var(--amber);}
 
   /* ---- domain compass (right) ---- */
   #domains{position:absolute;top:calc(3.2vh + 52px);right:20px;z-index:8;display:flex;flex-direction:column;gap:8px;width:190px;}
@@ -128,7 +132,7 @@
   #touch{position:absolute;inset:0;z-index:7;display:none;pointer-events:none;}
   #touch .pad{position:absolute;bottom:calc(3.2vh + 20px);pointer-events:auto;}
   #touch .steer{left:16px;display:flex;gap:10px;}
-  #touch .alt{right:16px;display:flex;flex-direction:column;gap:10px;}
+  #touch .alt{right:16px;display:flex;flex-direction:row;gap:10px;}
   .tbtn{width:60px;height:60px;border-radius:50%;background:rgba(20,20,20,0.5);border:1px solid var(--line);
     color:var(--cream);font-size:22px;display:flex;align-items:center;justify-content:center;user-select:none;}
   .tbtn:active{background:rgba(249,172,36,0.25);border-color:var(--amber);}
@@ -183,20 +187,26 @@
     .sysline{display:none;} #warm{display:none;}
     .logo-top{width:118px;height:17px;}
     #stats{gap:5px;} .stat{padding:4px 9px;} .stat .v{font-size:17px;}
-    /* stats centered above a 2×2 radar grid — every chip shows its full text at all times */
+    /* stats slim on top; mode switcher lives at the BOTTOM in the thumb zone and doubles as the radar */
     #stats{left:12px;right:12px;justify-content:center;}
-    #domains{left:12px;right:12px;top:calc(3.2vh + 94px);width:auto;max-width:none;flex-flow:row wrap;gap:5px;}
-    .dom{flex:1 1 calc(50% - 3px);min-width:0;padding:5px 8px 8px;}
+    #domains{left:12px;right:12px;top:auto;bottom:calc(3.2vh + 96px);width:auto;max-width:none;flex-flow:row nowrap;gap:5px;}
+    .dom{flex:1;min-width:0;padding:6px 3px 8px;text-align:center;}
     .dom.live{transform:none;}
-    .dom .nm{font-size:10px;letter-spacing:.8px;}
-    .dom .key{font-size:8px;padding:0 3px;}
-    .dom .cat{display:block;font-size:7px;letter-spacing:.4px;white-space:nowrap;overflow:hidden;}
-    .dom.live .cat{font-size:7px;}
-    .dom .sub{display:block;font-size:8.5px;white-space:nowrap;overflow:hidden;}
-    .dom .sub b{display:none;} /* drop the ◈ INCOMING prefix — distance + countdown fit fully */
-    #alert{top:22%;padding:8px 16px 10px;max-width:86vw;}
-    #alert .a-type{font-size:21px;}
-    #alert .a-mode{font-size:9px;letter-spacing:1.2px;}
+    .dom .row{justify-content:center;gap:4px;}
+    .dom .key{display:none;}
+    .dom .nm{font-size:9.5px;letter-spacing:.6px;}
+    .dom .cat{display:none;}
+    .dom.live .cat{display:none;}  /* the toast carries the category — chips stay minimal */
+    .dom .sub{display:block;font-size:8px;white-space:nowrap;overflow:hidden;min-height:10px;}
+    .dom .sub b{display:none;}
+    /* alert = slim one-line toast under the stats, never over the action */
+    #alert{top:calc(3.2vh + 100px);left:12px;right:12px;transform:none;max-width:none;padding:6px 10px 7px;
+      display:flex;align-items:baseline;justify-content:center;gap:8px;}
+    #alert.show{transform:none;}
+    #alert .a-kick{display:none;}
+    #alert .a-type{font-size:15px;margin:0;}
+    #alert .a-mode{font-size:8.5px;letter-spacing:1px;}
+    #pauseBtn{display:flex;}
     .loglock .champlogo{width:190px;height:26px;}
     .lede{font-size:13px;}
   }
@@ -237,6 +247,7 @@
 <div id="flash"></div>
 <div id="alert"><div class="a-kick">New signal detected</div><div class="a-type" id="alertType"></div><div class="a-mode" id="alertMode"></div></div>
 
+<div id="pauseBtn">❚❚</div>
 <div id="touch">
   <div class="pad steer"><div class="tbtn" data-k="left">◀</div><div class="tbtn" data-k="right">▶</div></div>
   <div class="pad alt"><div class="tbtn" data-k="up">▲</div><div class="tbtn" data-k="down">▼</div></div>
@@ -1092,10 +1103,11 @@ const alertEl=document.getElementById('alert'),alertType=document.getElementById
 const MODE_NAME={sky:['PLANE','1'],ocean:['SHIP','2'],road:['TRUCK','3'],rail:['TRAIN','4']};
 let alertT;
 function showAlert(d){ alertType.textContent=CAT[d].toUpperCase();
+  const mob=matchMedia('(max-width:760px)').matches; // no keyboard on mobile — they tap the chip
   alertMode.innerHTML = d===active ? 'YOU’RE IN POSITION — <b>'+MODE_NAME[d][0]+'</b> IS LIVE'
-                                   : 'SWITCH TO <b>'+MODE_NAME[d][0]+'</b> · PRESS <b>'+MODE_NAME[d][1]+'</b>';
+                                   : 'SWITCH TO <b>'+MODE_NAME[d][0]+'</b>'+(mob?'':' · PRESS <b>'+MODE_NAME[d][1]+'</b>');
   alertEl.classList.add('show'); clearTimeout(alertT);
-  alertT=setTimeout(()=>alertEl.classList.remove('show'),2600); }
+  alertT=setTimeout(()=>alertEl.classList.remove('show'),matchMedia('(max-width:760px)').matches?1800:2600); }
 
 const flashEl=document.getElementById('flash'); let ft;
 function flash(msg,color){ flashEl.textContent=msg; flashEl.style.color=color; flashEl.style.transition='none'; flashEl.style.opacity='1'; flashEl.style.transform='translate(-50%,-50%) scale(1)'; void flashEl.offsetWidth; flashEl.style.transition='opacity .7s,transform .7s'; flashEl.style.opacity='0'; flashEl.style.transform='translate(-50%,-64%) scale(1.12)'; clearTimeout(ft); }
@@ -1349,6 +1361,7 @@ document.getElementById('replayBtn').addEventListener('click',startGame);
 document.getElementById('resumeBtn').addEventListener('click',togglePause);
 document.getElementById('startOverBtn').addEventListener('click',startGame);
 document.querySelector('.stat.time').addEventListener('click',()=>{ if(running) togglePause(); });
+document.getElementById('pauseBtn').addEventListener('click',()=>{ if(running) togglePause(); });
 document.getElementById('capBtn').addEventListener('click',()=>{ const n=capName.value.trim(),em=capEmail.value.trim(),note=document.getElementById('capNote');
   if(!em||em.indexOf('@')<1){note.textContent='Add a work email and we’ll set up your live demo.';note.style.color='#F9AC24';return;}
   note.style.color='#F9AC24'; note.textContent='Got it'+(n?', '+n:'')+'. We’ll reach out to schedule your live demo. (Prototype: wire this to ChamPortal on go-live.)'; capBtn.textContent='Requested ✓'; });
