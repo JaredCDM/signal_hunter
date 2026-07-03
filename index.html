@@ -46,6 +46,15 @@
   .loglock{display:flex;align-items:center;justify-content:center;margin-bottom:22px;}
   .loglock .champlogo{width:238px;height:33px;}
   #loading .champlogo{width:248px;height:34px;display:block;margin:0 auto 16px;}
+  /* gold shine sweeps the text intermittently; ellipsis types in and out */
+  #loading .lt{background:linear-gradient(100deg,#8f8a80 42%,#F9AC24 50%,#FFC65A 52%,#8f8a80 60%);
+    background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:lshine 3.4s ease-in-out infinite;}
+  @keyframes lshine{0%,22%{background-position:135% 0}68%,100%{background-position:-45% 0}}
+  #loading .ld{opacity:0;animation:ldot 1.8s infinite;}
+  #loading .ld.d2{animation-delay:.22s}
+  #loading .ld.d3{animation-delay:.44s}
+  @keyframes ldot{0%,12%{opacity:0}35%,70%{opacity:1}88%,100%{opacity:0}}
   .product{font-family:var(--mono);font-weight:700;font-size:10.5px;letter-spacing:3px;color:var(--amber);
     padding-left:11px;margin-left:2px;border-left:1px solid var(--line);}
   .sysline{font-family:var(--mono);font-size:10px;letter-spacing:2.5px;color:var(--grey-2);text-align:right;text-shadow:0 1px 8px rgba(0,0,0,.6);}
@@ -285,7 +294,7 @@
   </div>
 </div>
 
-<div id="loading"><div class="l"><span class="champlogo"></span>SCANNING MARKET SIGNALS…</div></div>
+<div id="loading"><div class="l"><span class="champlogo"></span><span class="lt">SCANNING MARKET SIGNALS</span><span class="ld d1">.</span><span class="ld d2">.</span><span class="ld d3">.</span></div></div>
 
 <script type="importmap">
 {
@@ -848,46 +857,55 @@ function blob(w,l){ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,l),
 const blobs={ road:blob(7.5,23), rail:blob(7.5,66) }; // no ocean blob — a flat shadow can't sit on displaced swells
 let active='road';
 
-// ---------- Champion jet (Jared's GLB) replaces the procedural plane ----------
+// ---------- Champion jet (Jared's Jet2 GLB) replaces the procedural plane ----------
+// The model ships with two blank "logos" placeholder panels; we hide them and use their
+// exact bounds to place the real lockup (fuselage) and badge (tail) as decals.
+// No added nav lights — the model is used strictly as authored.
 { const inkify=img=>{ const c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
     const x=c.getContext('2d'); x.drawImage(img,0,0);
     x.globalCompositeOperation='source-in'; x.fillStyle='#181512'; x.fillRect(0,0,c.width,c.height); return c; };
   const loadImg=u=>new Promise(r=>{ const i=new Image(); i.onload=()=>r(i); i.onerror=()=>r(null); i.src=u; });
-  Promise.all([ new GLTFLoader().loadAsync('assets/champion-jet.glb').catch(()=>null),
+  Promise.all([ new GLTFLoader().loadAsync('assets/champion-jet2.glb').catch(()=>null),
                 loadImg('assets/champion-lockup-cream.png'), loadImg('assets/cream-logo.png') ])
   .then(([gltf,lockupImg,badgeImg])=>{
     if(!gltf||!lockupImg||!badgeImg) return;            // keep the procedural plane on any failure
     const jet=gltf.scene;
-    const paint=new THREE.MeshStandardMaterial({color:0xEFE9DC,metalness:0.22,roughness:0.34,envMapIntensity:1.25});
+    let logos=null;
     jet.traverse(o=>{ if(!o.isMesh) return; o.castShadow=true;
-      const n=(o.material&&o.material.name)||'';
-      if(n==='glass') o.material=M.glass;
-      else if(n==='Material'||n==='Material.009'||n==='Material.001'||n==='Material.002') o.material=paint;
-      else if(o.material) o.material.envMapIntensity=1.1; });
-    // normalize: wingspan 20, centered on the fuselage
+      if(((o.name||'')+(o.parent&&o.parent.name||'')).toLowerCase().includes('logo')) logos=o;
+      if(o.material && o.material.envMapIntensity===1) o.material.envMapIntensity=1.1; });
+    // normalize: length 21 down +Z, centered
     const stage=new THREE.Group(); stage.add(jet); scene.add(stage); stage.updateMatrixWorld(true);
     const size=new THREE.Box3().setFromObject(jet).getSize(new THREE.Vector3());
-    jet.scale.setScalar(20/size.x); stage.updateMatrixWorld(true);
+    jet.scale.setScalar(21/size.z); stage.updateMatrixWorld(true);
     const ctr=new THREE.Box3().setFromObject(jet).getCenter(new THREE.Vector3());
     jet.position.sub(ctr); stage.updateMatrixWorld(true);
-    let fus=null,best=0; jet.traverse(o=>{ if(o.isMesh){ const n=o.geometry.attributes.position.count; if(n>best){best=n;fus=o;} } });
+    let fus=null,best=0; jet.traverse(o=>{ if(!o.isMesh||o===logos) return;
+      const nm=((o.name||'')+(o.parent&&o.parent.name||'')).toLowerCase();
+      if(nm.includes('base')){ fus=o; best=1e9; }        // the fuselage mesh by name — biggest-mesh guessing picked the pinstripes
+      else { const n=o.geometry.attributes.position.count; if(n>best){best=n;fus=o;} } });
+    // read the placeholder panels' world bounds (tail = high, fuselage = low), then hide them
+    let tailBB=null, fusBB=null;
+    if(logos){ logos.updateMatrixWorld(true);
+      const pos=logos.geometry.attributes.position, v=new THREE.Vector3();
+      const pts=[]; for(let i=0;i<pos.count;i++){ v.fromBufferAttribute(pos,i).applyMatrix4(logos.matrixWorld); pts.push(v.clone()); }
+      const midY=(Math.min(...pts.map(p=>p.y))+Math.max(...pts.map(p=>p.y)))/2;
+      const box=arr=>{ const b=new THREE.Box3(); arr.forEach(p=>b.expandByPoint(p)); return b; };
+      tailBB=box(pts.filter(p=>p.y>=midY)); fusBB=box(pts.filter(p=>p.y<midY));
+      logos.visible=false; }
     const ink=inkify(lockupImg), inkBadge=inkify(badgeImg);
     const dtex=cv=>{ const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=8; return t; };
-    // livery band: pinstripes full-length, lockup toward the nose (mirrored per side so titles read nose-first)
-    const livery=side=>{ const c=document.createElement('canvas'); c.width=2048; c.height=256; const x=c.getContext('2d');
-      x.save(); if(side<0){ x.translate(2048,0); x.scale(-1,1); }
-      x.fillStyle='#181512';
-      [[166,7],[182,5],[195,4],[206,3]].forEach(([y,h])=>x.fillRect(0,y,2048,h));
-      const lw=350, lh=lw*(lockupImg.height/lockupImg.width);
-      x.drawImage(ink,265,150-lh,lw,lh);
-      x.restore(); return dtex(c); };
+    const lockupTex=side=>{ const ar=lockupImg.width/lockupImg.height;   // canvas matches panel aspect, lockup centered
+      const c=document.createElement('canvas'); c.width=1024; c.height=256; const x=c.getContext('2d');
+      x.save(); if(side<0){ x.translate(1024,0); x.scale(-1,1); }
+      const lw=Math.min(940, 236*ar), lh=lw/ar;
+      x.drawImage(ink,(1024-lw)/2,(256-lh)/2,lw,lh); x.restore(); return dtex(c); };
     const badgeTex=()=>{ const c=document.createElement('canvas'); c.width=256; c.height=256;
       c.getContext('2d').drawImage(inkBadge,0,0,256,256); return dtex(c); };
     const decals=[];
-    const JET={ ty:-0.4, tz:1.0, len:16, h:4, bx:0, by:2.3, bz:-8.0, bs:2.3, bd:1.6 };
-    function buildDecals(cfg){ Object.assign(JET,cfg||{});
+    const JET2={ lz:5.2, ly:-0.32, len:5.5, lh:1.15, by:1.05, bz:-7.85, bs:1.2 }; // tuned against the model (fuselage centerline ≈ y−1, raked T-tail fin)
+    function buildDecals(cfg){ Object.assign(JET2,cfg||{});
       for(const d of decals){ stage.remove(d); d.geometry.dispose(); } decals.length=0;
-      // rebuild with the stage briefly at the origin so world == local
       const sp=stage.position.clone(), sr=stage.rotation.clone();
       stage.position.set(0,0,0); stage.rotation.set(0,0,0); stage.updateMatrixWorld(true);
       const mk=(tex,pos,rotY,sz)=>{ const m=new THREE.Mesh(
@@ -895,19 +913,14 @@ let active='road';
           new THREE.MeshStandardMaterial({map:tex,transparent:true,depthTest:true,depthWrite:false,
             polygonOffset:true,polygonOffsetFactor:-4,roughness:0.5,metalness:0.1}));
         m.renderOrder=3; stage.add(m); decals.push(m); };
-      mk(livery(1),  new THREE.Vector3( 1.6,JET.ty,JET.tz),  Math.PI/2, new THREE.Vector3(JET.len,JET.h,3));
-      mk(livery(-1), new THREE.Vector3(-1.6,JET.ty,JET.tz), -Math.PI/2, new THREE.Vector3(JET.len,JET.h,3));
-      // one projector through the thin fin textures both faces (far side mirrors — imperceptible on the badge)
-      mk(badgeTex(), new THREE.Vector3(JET.bx,JET.by,JET.bz), Math.PI/2, new THREE.Vector3(JET.bs,JET.bs,JET.bd));
+      mk(lockupTex(1),  new THREE.Vector3( 1.4,JET2.ly,JET2.lz),  Math.PI/2, new THREE.Vector3(JET2.len,JET2.lh,2.4));
+      mk(lockupTex(-1), new THREE.Vector3(-1.4,JET2.ly,JET2.lz), -Math.PI/2, new THREE.Vector3(JET2.len,JET2.lh,2.4));
+      mk(badgeTex(), new THREE.Vector3(0,JET2.by,JET2.bz), Math.PI/2, new THREE.Vector3(JET2.bs,JET2.bs,1.2));
       stage.position.copy(sp); stage.rotation.copy(sr); stage.updateMatrixWorld(true); }
     buildDecals();
     window.__jet=buildDecals; // TEMP tuning hook (remove before ship)
-    // swap in: the stage becomes the sky vehicle
+    // swap in: the stage becomes the sky vehicle (no blinkers — model as authored)
     stage.userData.blink=[];
-    const tip=new THREE.Box3().setFromObject(jet);
-    blinker(stage, 9.8,0.1,-1.0,0xff3030,5, 1);
-    blinker(stage,-9.8,0.1,-1.0,0x30ff50,5,-1);
-    blinker(stage,0,tip.max.y-0.15,tip.min.z+1.2,0xff3030,7,2);
     const old=vehicles.sky.mesh; scene.remove(old);
     stage.position.copy(old.position); vehicles.sky.mesh=stage;
   }); }
@@ -1396,6 +1409,7 @@ window.__step=(n,dt)=>{ for(let i=0;i<(n||60);i++) tick(dt||1/60); return 'stepp
 window.__setActive=d=>{ setActive(d); return active; };
 window.__cam=(x,y,z,tx,ty,tz)=>{ camera.position.set(x,y,z); camera.lookAt(tx,ty,tz); return 'cam set'; }; // TEMP: works while paused
 window.__pos=d=>vehicles[d].mesh.position.toArray(); // TEMP
+window.__veh=d=>vehicles[d].mesh; // TEMP
 updateHUD(); setActive('road');
 setTimeout(()=>{ document.getElementById('loading').style.display='none'; },9000); // safety net if the HDRI stalls
 frame();
