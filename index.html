@@ -289,7 +289,7 @@
   <div class="panel">
     <div class="loglock"><span class="champlogo"></span></div>
     <div class="kicker">Stop flying blind</div>
-    <h1>CAPTURE THE <span class="am">SIGNALS.</span></h1>
+    <h1>SIGNAL <span class="am">HUNTER</span></h1>
     <p class="lede">Your buyers are broadcasting intent across all of their digital touchpoints. Knowing how to capture these signals is the difference between <b>sustainable growth</b> and flying blind.</p>
     <p class="lede">Roam across <b>land, air, and sea</b> to bring them in. Each mode hunts one type of signal, and you can only pilot one at a time. Read where the signal is firing, switch to the right mode, and capture the signal before it goes cold.</p>
     <div class="legend">
@@ -927,14 +927,14 @@ new GLTFLoader().loadAsync('assets/champion-ship.glb').catch(()=>null).then(gltf
   ship.rotation.y=Math.PI/2;                               // hull runs along X in the file — yaw bow-first onto +Z
   stage.updateMatrixWorld(true);
   const size=new THREE.Box3().setFromObject(ship).getSize(new THREE.Vector3());
-  ship.scale.setScalar(81/size.z); stage.updateMatrixWorld(true);  // +50% (Jared: still felt too small at 54)
+  ship.scale.setScalar(162/size.z); stage.updateMatrixWorld(true); // 54→81→162 (Jared: +100% again — a proper mega-ship)
   const bb=new THREE.Box3().setFromObject(ship), c=bb.getCenter(new THREE.Vector3());
   ship.position.x-=c.x; ship.position.z-=c.z;
   ship.position.y-=bb.min.y+(bb.max.y-bb.min.y)*0.09;      // waterline: half the black lower-hull band below water
   stage.updateMatrixWorld(true);
   stage.userData.blink=[];
   const bb2=new THREE.Box3().setFromObject(stage);
-  blinker(stage,0,bb2.max.y+0.25,-21,0xffffff,3,0);        // masthead strobe (mast ~-21 on the longer hull)
+  blinker(stage,0,bb2.max.y+0.25,-42,0xffffff,3,0);        // masthead strobe (mast ~-42 on the doubled hull)
   const old=vehicles.ocean.mesh; scene.remove(old);
   stage.position.copy(old.position); vehicles.ocean.mesh=stage;
 });
@@ -1084,8 +1084,8 @@ function puff(x,y,z,col,scale,life,grow,op,wide){ if(parts.length>240) return;
 let emitT=0;
 function emitParticles(dt){ emitT+=dt; if(emitT<0.07) return; emitT=0;
   const tr=vehicles.road;  puff(tr.x+rand(-1.7,1.7),0.5,tr.z-9.8,0xC9A46A,rand(2,3.4),rand(0.7,1.1),1.7,0.2);
-  const sh=vehicles.ocean; puff(sh.x+rand(-3.2,3.2),seaY(sh.x,sh.z-40)+0.5,sh.z-40-rand(0,10),0xEAF2EF,rand(4,7),rand(1.7,2.6),1.1,0.5,2.6);
-                           puff(sh.x+rand(-5,5),seaY(sh.x,sh.z+39)+0.45,sh.z+39.5,0xEAF2EF,rand(2.4,4),0.8,1.6,0.45,1.8);
+  const sh=vehicles.ocean; puff(sh.x+rand(-4.5,4.5),seaY(sh.x,sh.z-80)+0.5,sh.z-80-rand(0,14),0xEAF2EF,rand(6,11),rand(1.7,2.6),1.1,0.5,2.8);
+                           puff(sh.x+rand(-7,7),seaY(sh.x,sh.z+78)+0.45,sh.z+78.5,0xEAF2EF,rand(3.4,5.5),0.8,1.6,0.45,1.9);
   const pl=vehicles.sky;   puff(pl.x,pl.y-0.5,pl.z-6.5,0xFFF6E8,1.2,rand(1.3,1.9),2.0,0.16);
   const tn=vehicles.rail, ru=tn.mesh.userData;  puff(tn.x+rand(-0.6,0.6),tn.mesh.position.y+(ru.stackDY??5.2),tn.z+(ru.stackDZ??5.6),0x555a60,rand(0.9,1.4),rand(1.2,1.8),1.6,0.16); }
 function updateParticles(dt){ for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.t+=dt; const k=p.t/p.life;
@@ -1378,8 +1378,8 @@ function tick(dt,t){
   // camera chase — with drift, per-mode lenses, a final-10s push-in, and catch shake
   const v=vehicles[active];
   const push = (running&&timeLeft<10)?(10-timeLeft):0;      // creep closer as the clock runs out
-  const behind = (active==='sky'?26:active==='ocean'?72:active==='road'?46:34) - push*0.55;
-  const height = (active==='sky'?9:active==='ocean'?57:active==='road'?17:14) - push*(active==='ocean'?1.1:0.22);
+  const behind = (active==='sky'?26:active==='ocean'?115:active==='road'?46:34) - push*0.55;
+  const height = (active==='sky'?9:active==='ocean'?92:active==='road'?17:14) - push*(active==='ocean'?1.1:0.22);
   const yy = active==='ocean'?(0.55+seaY(v.x,v.z)*0.92):v.y;
   // lazy handheld drift — two incommensurate sines per axis so it never loops visibly
   const drX=Math.sin(simT*0.31)*0.55+Math.sin(simT*0.117+1.7)*0.35;
@@ -1392,7 +1392,7 @@ function tick(dt,t){
   if(sw<1) camera.position.lerpVectors(swFrom,camPos,sw);
   else camera.position.lerp(camPos, Math.min(1,dt*3.2));
   if(shake>0.01){ camera.position.x+=Math.sin(simT*43)*shake*0.28; camera.position.y+=Math.cos(simT*57)*shake*0.2; shake*=Math.pow(0.01,dt); }
-  camLook.set(v.x + drX*0.35, yy+(active==='sky'?2:(active==='ocean'?4:5)), v.z + (active==='ocean'?42:55));
+  camLook.set(v.x + drX*0.35, yy+(active==='sky'?2:(active==='ocean'?9:5)), v.z + (active==='ocean'?66:55));
   if(sw<1){ // while the whip flies, frame the incoming signal so you land already oriented
     let tgt=null,bz=1e9; for(const s of signals[active]) if(!s.dead && s.z<bz){ bz=s.z; tgt=s; }
     if(tgt){ const w=(1-sw)*0.65;
