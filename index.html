@@ -895,7 +895,7 @@ new GLTFLoader().loadAsync('assets/champion-ship.glb').catch(()=>null).then(gltf
   ship.rotation.y=Math.PI/2;                               // hull runs along X in the file — yaw bow-first onto +Z
   stage.updateMatrixWorld(true);
   const size=new THREE.Box3().setFromObject(ship).getSize(new THREE.Vector3());
-  ship.scale.setScalar(42/size.z); stage.updateMatrixWorld(true);
+  ship.scale.setScalar(54/size.z); stage.updateMatrixWorld(true);
   const bb=new THREE.Box3().setFromObject(ship), c=bb.getCenter(new THREE.Vector3());
   ship.position.x-=c.x; ship.position.z-=c.z;
   ship.position.y-=bb.min.y+(bb.max.y-bb.min.y)*0.09;      // waterline: half the black lower-hull band below water
@@ -910,9 +910,10 @@ new GLTFLoader().loadAsync('assets/champion-ship.glb').catch(()=>null).then(gltf
 // ================= SIGNALS =================
 const signals={sky:[],ocean:[],road:[],rail:[]};
 // signal markers are gameplay UI — fog:false so they stay legible at range instead of fading into the haze
-const beamMat=new THREE.MeshBasicMaterial({color:COL.amber,transparent:true,opacity:0.32,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});
-const coreMat=new THREE.MeshBasicMaterial({color:0xFFBE52,fog:false});
-const ringMat=new THREE.MeshBasicMaterial({color:COL.amber,transparent:true,opacity:0.6,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,depthWrite:false,fog:false});
+const beamMat=new THREE.MeshBasicMaterial({color:COL.amber,transparent:true,opacity:0.55,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});
+const coreMat=new THREE.MeshBasicMaterial({color:0xFFE0A0,fog:false});
+const ringMat=new THREE.MeshBasicMaterial({color:COL.amber,transparent:true,opacity:0.85,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,depthWrite:false,fog:false});
+let glowMat=null; // built once puffTex exists (defined further down); see initSignalGlow()
 
 function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   const isSky=dom==='sky';
@@ -941,16 +942,18 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
     z = v.z + tNew*v.speed;
     if(z - v.z > 620) return null;                               // no fair slot yet — spawner retries shortly
   }
-  // core
-  const core=new THREE.Mesh(new THREE.SphereGeometry(isSky?1.8:1.05,16,16),coreMat); grp.add(core);
-  // beam
-  if(!isSky){ const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.9,2.2,46,14,1,true),beamMat); beam.position.y=23-y; grp.add(beam);
+  // dark contrast halo FIRST (renders behind) so the orb reads even against a bright sky
+  if(isSky){ const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:puffTex,color:0x120f0b,transparent:true,opacity:0.7,depthWrite:false,fog:false}));
+    halo.scale.set(16,16,1); grp.add(halo); grp.userData.halo=halo; }
+  // core + bright additive glow — pops against the warm environment
+  const glow=new THREE.Sprite(glowMat); glow.scale.set(isSky?12:7.5,isSky?12:7.5,1); grp.add(glow); grp.userData.glow=glow;
+  const core=new THREE.Mesh(new THREE.SphereGeometry(isSky?2.1:1.25,16,16),coreMat); grp.add(core);
+  // beam — always reaches the ground (≈y0), whatever the orb's altitude
+  if(!isSky){ const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.9,2.4,46,16,1,true),beamMat); beam.position.y=23-y; grp.add(beam);
     grp.userData.beam=beam; }
-  else { // sky signals need contrast against a bright sky: strong vertical beam + dark halo behind the core
-    const bm=beamMat.clone(); bm.opacity=0.5;
-    const beam=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.4,110,12,1,true),bm); grp.add(beam);
-    const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:puffTex,color:0x141414,transparent:true,opacity:0.6,depthWrite:false,fog:false}));
-    halo.scale.set(14,14,1); grp.add(halo); grp.userData.halo=halo; }
+  else { // drop a searchlight beam from the high orb all the way down to the ground
+    const bh=y+8;                                                   // ground(≈0) up to just past the orb
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(1.1,3.0,bh,16,1,true),beamMat); beam.position.y=-y/2; grp.add(beam); }
   // rings
   const rings=[]; for(let i=0;i<3;i++){ const r=new THREE.Mesh(new THREE.RingGeometry(2,2.5,32),ringMat.clone()); r.rotation.x=-Math.PI/2;
     if(!isSky) r.position.y=0.35; // hover the rings off the corridor surface — flush planes z-fight
@@ -988,6 +991,8 @@ function burst(x,y,z){ const r=new THREE.Mesh(new THREE.RingGeometry(1,2.4,32),n
 const puffTex=ctex(64,64,(x)=>{ const g=x.createRadialGradient(32,32,2,32,32,30);
   g.addColorStop(0,'rgba(255,255,255,0.9)'); g.addColorStop(0.6,'rgba(255,255,255,0.35)'); g.addColorStop(1,'rgba(255,255,255,0)');
   x.fillStyle=g; x.fillRect(0,0,64,64); });
+// bright additive halo that makes every signal orb pop against the warm environment
+glowMat=new THREE.SpriteMaterial({map:puffTex,color:0xFFC65A,transparent:true,opacity:0.95,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});
 const parts=[];
 function puff(x,y,z,col,scale,life,grow,op,wide){ if(parts.length>240) return;
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:puffTex,color:col,transparent:true,opacity:op,depthWrite:false}));
@@ -996,8 +1001,8 @@ function puff(x,y,z,col,scale,life,grow,op,wide){ if(parts.length>240) return;
 let emitT=0;
 function emitParticles(dt){ emitT+=dt; if(emitT<0.07) return; emitT=0;
   const tr=vehicles.road;  puff(tr.x+rand(-1.7,1.7),0.5,tr.z-9.8,0xC9A46A,rand(2,3.4),rand(0.7,1.1),1.7,0.2);
-  const sh=vehicles.ocean; puff(sh.x+rand(-2.4,2.4),seaY(sh.x,sh.z-21)+0.5,sh.z-21-rand(0,7),0xEAF2EF,rand(3,5.5),rand(1.7,2.6),1.1,0.5,2.2);
-                           puff(sh.x+rand(-3.4,3.4),seaY(sh.x,sh.z+20)+0.45,sh.z+20.5,0xEAF2EF,rand(1.8,3),0.8,1.6,0.45,1.6);
+  const sh=vehicles.ocean; puff(sh.x+rand(-2.8,2.8),seaY(sh.x,sh.z-27)+0.5,sh.z-27-rand(0,8),0xEAF2EF,rand(3.4,6),rand(1.7,2.6),1.1,0.5,2.4);
+                           puff(sh.x+rand(-4,4),seaY(sh.x,sh.z+26)+0.45,sh.z+26.5,0xEAF2EF,rand(2,3.4),0.8,1.6,0.45,1.7);
   const pl=vehicles.sky;   puff(pl.x,pl.y-0.5,pl.z-6.5,0xFFF6E8,1.2,rand(1.3,1.9),2.0,0.16);
   const tn=vehicles.rail;  puff(tn.x+rand(-0.6,0.6),6.2,tn.z+5.6,0x555a60,rand(0.9,1.4),rand(1.2,1.8),1.6,0.16); }
 function updateParticles(dt){ for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.t+=dt; const k=p.t/p.life;
@@ -1199,10 +1204,12 @@ function tick(dt,t){
   for(const d of DOMAINS){ const arr=signals[d]; const v=vehicles[d];
     for(const s of arr){ if(s.dead)continue; s.t+=dt; if(running)s.life-=dt;
       // ring anim
-      for(const r of s.grp.userData.rings){ const ph=((s.t*0.6+r.ph)%1); const sc=1+ph*5.5; r.m.scale.set(sc,sc,sc); r.m.material.opacity=0.55*(1-ph); }
-      s.grp.userData.core.scale.setScalar(1+Math.sin(s.t*4)*0.12);
+      for(const r of s.grp.userData.rings){ const ph=((s.t*0.6+r.ph)%1); const sc=1+ph*5.5; r.m.scale.set(sc,sc,sc); r.m.material.opacity=0.8*(1-ph); }
+      const pulse=1+Math.sin(s.t*4)*0.12;
+      s.grp.userData.core.scale.setScalar(pulse);
+      if(s.grp.userData.glow) s.grp.userData.glow.scale.setScalar((s.dom==='sky'?12:7.5)*pulse); // glow breathes with the core
       if(s.grp.userData.halo){ const hd=s.z-vehicles[d].z; // contrast halo is for distance reads — fade it out up close
-        s.grp.userData.halo.material.opacity=0.6*Math.min(1,Math.max(0,(hd-35)/120)); }
+        s.grp.userData.halo.material.opacity=0.7*Math.min(1,Math.max(0,(hd-35)/120)); }
       // collect check for active vehicle
       if(d===active){ const dz=s.z-v.z; const dx=Math.abs(s.x-v.x); const dy=d==='sky'?Math.abs(s.y-v.y):0;
         const cr = d==='sky'?11 : d==='ocean'?8 : d==='road'?5.5 : 11;
@@ -1257,8 +1264,8 @@ function tick(dt,t){
   // camera chase — with drift, per-mode lenses, a final-10s push-in, and catch shake
   const v=vehicles[active];
   const push = (running&&timeLeft<10)?(10-timeLeft):0;      // creep closer as the clock runs out
-  const behind = (active==='sky'?26:(active==='ocean'?48:34)) - push*0.55;
-  const height = (active==='sky'?9:(active==='ocean'?38:14)) - push*(active==='ocean'?1.1:0.22);
+  const behind = (active==='sky'?26:(active==='ocean'?58:34)) - push*0.55;
+  const height = (active==='sky'?9:(active==='ocean'?46:14)) - push*(active==='ocean'?1.1:0.22);
   const yy = active==='ocean'?(0.55+seaY(v.x,v.z)*0.92):v.y;
   // lazy handheld drift — two incommensurate sines per axis so it never loops visibly
   const drX=Math.sin(simT*0.31)*0.55+Math.sin(simT*0.117+1.7)*0.35;
