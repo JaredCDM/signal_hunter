@@ -919,13 +919,13 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   const y = isSky ? rand(L.alt[0]+6,L.alt[1]-6) : L.y;
   // rail signals sit on the track (train can't swerve); road/ocean spawn off-center so steering matters
   const x = dom==='rail'  ? L.x
-          : dom==='road'  ? L.x + (Math.random()<0.5?-1:1)*rand(2.5,L.halfW*0.85)
-          : dom==='ocean' ? L.x + (Math.random()<0.5?-1:1)*rand(5,L.halfW*0.6)
+          : dom==='road'  ? L.x + (Math.random()<0.5?-1:1)*rand(6,L.halfW*0.85)
+          : dom==='ocean' ? L.x + (Math.random()<0.5?-1:1)*rand(9,L.halfW*0.6)
           : L.x + rand(-L.halfW*0.5,L.halfW*0.5);
   // spawn distance scales with vehicle speed; both distance and life-buffer tighten as the hunt progresses,
   // so every signal stays catchable but the margin shrinks
   const p=running?1-timeLeft/90:0;
-  const v=vehicles[dom]; let z = v.z + Math.min(560, v.speed*rand(lerp(5.2,3.15,p),lerp(6.5,3.85,p)));
+  const v=vehicles[dom]; let z = v.z + Math.min(560, v.speed*rand(lerp(5.2,2.4,p),lerp(6.5,2.9,p)));
   // ---- feasibility: schedule this pass AFTER every live signal, leaving time to switch + steer to it.
   // Guarantees a perfect chain always exists; M is the shrinking human-margin (the difficulty dial).
   { const M=lerp(0.82,0.11,p);
@@ -935,7 +935,9 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
     let latest=0;
     for(const dd of DOMAINS) for(const s2 of signals[dd]) if(!s2.dead)
       latest=Math.max(latest,(s2.z-vehicles[dd].z)/vehicles[dd].speed);
-    const tNew=Math.max((z-v.z)/v.speed, latest + needT + M);
+    // HARD RULE: consecutive passes land at least 2s apart — a human with perfect
+    // reflexes can always chain them; difficulty comes from sustaining it for 90s
+    const tNew=Math.max((z-v.z)/v.speed, latest + Math.max(needT + M, 2.0));
     z = v.z + tNew*v.speed;
     if(z - v.z > 620) return null;                               // no fair slot yet — spawner retries shortly
   }
