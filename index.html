@@ -238,7 +238,7 @@
 <div id="alert"><div class="a-kick">New signal detected</div><div class="a-type" id="alertType"></div><div class="a-mode" id="alertMode"></div></div>
 
 <div id="touch">
-  <div class="pad steer"><div class="tbtn" data-k="left">‹</div><div class="tbtn" data-k="right">›</div></div>
+  <div class="pad steer"><div class="tbtn" data-k="left">◀</div><div class="tbtn" data-k="right">▶</div></div>
   <div class="pad alt"><div class="tbtn" data-k="up">▲</div><div class="tbtn" data-k="down">▼</div></div>
 </div>
 
@@ -268,6 +268,7 @@
     <h1>TAKE A <span class="am">BREATH.</span></h1>
     <p class="lede">Capturing intent signals manually can be exhausting. Press <b>space</b>, or the button below, to get back out there.</p>
     <button class="btn" id="resumeBtn">Resume the hunt →</button>
+    <button class="btn ghost replay" id="startOverBtn">Start over</button>
   </div>
 </div>
 
@@ -285,7 +286,7 @@
     <p class="handoff">Champion's system automatically resolves intent signals to named contacts and accounts, <b>so you never miss a thing.</b></p>
     <p class="handoff last">Want to see who's broadcasting inside <em>your</em> market?</p>
     <div class="capture">
-      <input type="text" id="capName" placeholder="First name" autocomplete="given-name" />
+      <input type="text" id="capName" placeholder="Name" autocomplete="name" />
       <input type="email" id="capEmail" placeholder="Work email" autocomplete="email" />
       <button class="btn" id="capBtn">Request live demo →</button>
     </div>
@@ -308,7 +309,6 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
 import { Water } from 'three/addons/objects/Water.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -857,106 +857,22 @@ function blob(w,l){ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,l),
 const blobs={ road:blob(7.5,23), rail:blob(7.5,66) }; // no ocean blob — a flat shadow can't sit on displaced swells
 let active='road';
 
-// ---------- Champion jet (Jared's Jet2 GLB) replaces the procedural plane ----------
-// The model ships with two blank "logos" placeholder panels; we hide them and use their
-// exact bounds to place the real lockup (fuselage) and badge (tail) as decals.
-// No added nav lights — the model is used strictly as authored.
-{ const inkify=img=>{ const c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
-    const x=c.getContext('2d'); x.drawImage(img,0,0);
-    x.globalCompositeOperation='source-in'; x.fillStyle='#181512'; x.fillRect(0,0,c.width,c.height); return c; };
-  const loadImg=u=>new Promise(r=>{ const i=new Image(); i.onload=()=>r(i); i.onerror=()=>r(null); i.src=u; });
-  Promise.all([ new GLTFLoader().loadAsync('assets/champion-jet2.glb').catch(()=>null),
-                loadImg('assets/champion-lockup-cream.png'), loadImg('assets/cream-logo.png') ])
-  .then(([gltf,lockupImg,badgeImg])=>{
-    if(!gltf||!lockupImg||!badgeImg) return;            // keep the procedural plane on any failure
-    const jet=gltf.scene;
-    let logos=null;
-    const engineBlack=new THREE.MeshStandardMaterial({color:0x17181b,metalness:0.45,roughness:0.32,envMapIntensity:1.2});
-    jet.traverse(o=>{ if(!o.isMesh) return; o.castShadow=true;
-      const nm=((o.name||'')+(o.parent&&o.parent.name||'')).toLowerCase();
-      if(nm.includes('logo')) logos=o;
-      // engine bodies go black; the fan/intake metals stay as authored
-      if(nm.includes('turbin') && o.material && o.material.name==='brushed_metal_shader') o.material=engineBlack;
-      if(o.material && o.material.envMapIntensity===1) o.material.envMapIntensity=1.1; });
-    // normalize: length 21 down +Z, centered
-    const stage=new THREE.Group(); stage.add(jet); scene.add(stage); stage.updateMatrixWorld(true);
-    const size=new THREE.Box3().setFromObject(jet).getSize(new THREE.Vector3());
-    jet.scale.setScalar(21/size.z); stage.updateMatrixWorld(true);
-    const ctr=new THREE.Box3().setFromObject(jet).getCenter(new THREE.Vector3());
-    jet.position.sub(ctr); stage.updateMatrixWorld(true);
-    let fus=null,best=0; jet.traverse(o=>{ if(!o.isMesh||o===logos) return;
-      const nm=((o.name||'')+(o.parent&&o.parent.name||'')).toLowerCase();
-      if(nm.includes('base')){ fus=o; best=1e9; }        // the fuselage mesh by name — biggest-mesh guessing picked the pinstripes
-      else { const n=o.geometry.attributes.position.count; if(n>best){best=n;fus=o;} } });
-    // read the placeholder panels' world bounds (tail = high, fuselage = low), then hide them
-    let tailBB=null, fusBB=null;
-    if(logos){ logos.updateMatrixWorld(true);
-      const pos=logos.geometry.attributes.position, v=new THREE.Vector3();
-      const pts=[]; for(let i=0;i<pos.count;i++){ v.fromBufferAttribute(pos,i).applyMatrix4(logos.matrixWorld); pts.push(v.clone()); }
-      const midY=(Math.min(...pts.map(p=>p.y))+Math.max(...pts.map(p=>p.y)))/2;
-      const box=arr=>{ const b=new THREE.Box3(); arr.forEach(p=>b.expandByPoint(p)); return b; };
-      tailBB=box(pts.filter(p=>p.y>=midY)); fusBB=box(pts.filter(p=>p.y<midY));
-      logos.visible=false; }
-    const ink=inkify(lockupImg), inkBadge=inkify(badgeImg);
-    const dtex=cv=>{ const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=8; return t; };
-    const lockupTex=side=>{ const ar=lockupImg.width/lockupImg.height;   // canvas matches panel aspect, lockup centered
-      const c=document.createElement('canvas'); c.width=1024; c.height=256; const x=c.getContext('2d');
-      x.save(); if(side<0){ x.translate(1024,0); x.scale(-1,1); }
-      const lw=Math.min(940, 236*ar), lh=lw/ar;
-      x.drawImage(ink,(1024-lw)/2,(256-lh)/2,lw,lh); x.restore(); return dtex(c); };
-    const badgeTex=()=>{ const c=document.createElement('canvas'); c.width=256; c.height=256;
-      c.getContext('2d').drawImage(inkBadge,0,0,256,256); return dtex(c); };
-    // tail speed-stripes: the badge's three stepped wing bars, sweeping backward on BOTH fin sides
-    const stripesTex=side=>{ const c=document.createElement('canvas'); c.width=512; c.height=320; const x=c.getContext('2d');
-      x.save(); if(side<0){ x.translate(512,0); x.scale(-1,1); }
-      x.fillStyle='#181512';
-      // three bars, stepped shorter toward the bottom, right ends sheared along a common diagonal (like the badge)
-      const bars=[[36,470],[118,392],[200,314]], bh=56, shear=64;
-      for(const [by,bx] of bars){ x.beginPath();
-        x.moveTo(26,by+bh*0.5); x.arc(26+bh*0.5,by+bh*0.5,bh*0.5,Math.PI*0.5,Math.PI*1.5); // rounded left tip
-        x.lineTo(bx,by); x.lineTo(bx-shear,by+bh); x.lineTo(26+bh*0.5,by+bh); x.closePath(); x.fill(); }
-      x.restore(); return dtex(c); };
-    // keep only the faces looking at the projector — a thin fin otherwise gets a mirrored copy on its far side
-    const cullAway=(geo,dir)=>{ const p=geo.attributes.position,n=geo.attributes.normal,u=geo.attributes.uv;
-      const P=[],N=[],U=[];
-      for(let i=0;i<p.count;i+=3){
-        const d=(n.getX(i)+n.getX(i+1)+n.getX(i+2))*dir.x+(n.getY(i)+n.getY(i+1)+n.getY(i+2))*dir.y+(n.getZ(i)+n.getZ(i+1)+n.getZ(i+2))*dir.z;
-        if(d>=0) continue;
-        for(let k=0;k<3;k++){ P.push(p.getX(i+k),p.getY(i+k),p.getZ(i+k)); N.push(n.getX(i+k),n.getY(i+k),n.getZ(i+k)); U.push(u.getX(i+k),u.getY(i+k)); } }
-      const g=new THREE.BufferGeometry();
-      g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
-      g.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));
-      g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2)); return g; };
-    const blackTex=()=>{ const c=document.createElement('canvas'); c.width=64; c.height=64;
-      const x=c.getContext('2d'); x.fillStyle='#181512'; x.fillRect(0,0,64,64); return dtex(c); };
-    const decals=[];
-    // fuselage centerline ≈ y−1 (fin skews the bbox)
-    const JET2={ lz:5.2, ly:-0.32, len:3.8, lh:0.8, sy:0.88, sz:-8.05, sl:2.1, sh:1.15, kx:5.8, kz:-2.3, kw:1.35, kc:5.0 };
-    function buildDecals(cfg){ Object.assign(JET2,cfg||{});
-      for(const d of decals){ stage.remove(d); d.geometry.dispose(); } decals.length=0;
-      const sp=stage.position.clone(), sr=stage.rotation.clone();
-      stage.position.set(0,0,0); stage.rotation.set(0,0,0); stage.updateMatrixWorld(true);
-      const mat=tex=>new THREE.MeshStandardMaterial({map:tex,transparent:true,depthTest:true,depthWrite:false,
-        polygonOffset:true,polygonOffsetFactor:-4,roughness:0.5,metalness:0.1});
-      const mk=(tex,pos,eul,sz,cullDir)=>{ let g=new DecalGeometry(fus,pos,eul,sz);
-        if(cullDir) g=cullAway(g,cullDir);
-        const m=new THREE.Mesh(g,mat(tex)); m.renderOrder=3; stage.add(m); decals.push(m); };
-      // box reaches well past the skin (~|x| 0.93) for clean projection, stops short of the crown top
-      mk(lockupTex(1),  new THREE.Vector3( 1.4,JET2.ly,JET2.lz), new THREE.Euler(0, Math.PI/2,0), new THREE.Vector3(JET2.len,JET2.lh,1.9));
-      mk(lockupTex(1),  new THREE.Vector3(-1.4,JET2.ly,JET2.lz), new THREE.Euler(0,-Math.PI/2,0), new THREE.Vector3(JET2.len,JET2.lh,1.9)); // same canvas both sides — the opposed projectors already mirror
-      mk(stripesTex(1),  new THREE.Vector3( 0.7,JET2.sy,JET2.sz), new THREE.Euler(0, Math.PI/2,0), new THREE.Vector3(JET2.sl,JET2.sh,1.5), new THREE.Vector3(-1,0,0));
-      mk(stripesTex(1),  new THREE.Vector3(-0.7,JET2.sy,JET2.sz), new THREE.Euler(0,-Math.PI/2,0), new THREE.Vector3(JET2.sl,JET2.sh,1.5), new THREE.Vector3( 1,0,0));
-      // thick black band across each wing's full chord (wing surface sits near y −1.5 at mid-span)
-      for(const s of [-1,1])
-        mk(blackTex(), new THREE.Vector3(JET2.kx*s,-0.9,JET2.kz), new THREE.Euler(-Math.PI/2,0,0), new THREE.Vector3(JET2.kw,JET2.kc,3.0));
-      stage.position.copy(sp); stage.rotation.copy(sr); stage.updateMatrixWorld(true); }
-    buildDecals();
-    window.__jet=buildDecals; // TEMP tuning hook (remove before ship)
-    // swap in: the stage becomes the sky vehicle (no blinkers — model as authored)
-    stage.userData.blink=[];
-    const old=vehicles.sky.mesh; scene.remove(old);
-    stage.position.copy(old.position); vehicles.sky.mesh=stage;
-  }); }
+// ---------- Champion jet (Jared's Jet3 GLB — livery baked in by the designer) ----------
+new GLTFLoader().loadAsync('assets/champion-jet3.glb').catch(()=>null).then(gltf=>{
+  if(!gltf) return;                                        // procedural plane stays as fallback
+  const jet=gltf.scene;
+  jet.traverse(o=>{ if(!o.isMesh) return; o.castShadow=true;
+    if(o.material && o.material.envMapIntensity===1) o.material.envMapIntensity=1.1; });
+  // normalize: length 21 down +Z, centered
+  const stage=new THREE.Group(); stage.add(jet); scene.add(stage); stage.updateMatrixWorld(true);
+  const size=new THREE.Box3().setFromObject(jet).getSize(new THREE.Vector3());
+  jet.scale.setScalar(21/size.z); stage.updateMatrixWorld(true);
+  const ctr=new THREE.Box3().setFromObject(jet).getCenter(new THREE.Vector3());
+  jet.position.sub(ctr); stage.updateMatrixWorld(true);
+  stage.userData.blink=[];                                 // no added lights — model strictly as authored
+  const old=vehicles.sky.mesh; scene.remove(old);
+  stage.position.copy(old.position); vehicles.sky.mesh=stage;
+});
 
 // ---------- Champion container ship (Jared's GLB, pre-branded textures) ----------
 new GLTFLoader().loadAsync('assets/champion-ship.glb').catch(()=>null).then(gltf=>{
@@ -998,10 +914,10 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   // spawn distance scales with vehicle speed; both distance and life-buffer tighten as the hunt progresses,
   // so every signal stays catchable but the margin shrinks
   const p=running?1-timeLeft/90:0;
-  const v=vehicles[dom]; let z = v.z + Math.min(560, v.speed*rand(lerp(5.2,3.0,p),lerp(6.5,3.7,p)));
+  const v=vehicles[dom]; let z = v.z + Math.min(560, v.speed*rand(lerp(5.2,3.15,p),lerp(6.5,3.85,p)));
   // ---- feasibility: schedule this pass AFTER every live signal, leaving time to switch + steer to it.
   // Guarantees a perfect chain always exists; M is the shrinking human-margin (the difficulty dial).
-  { const M=lerp(0.8,0.08,p);
+  { const M=lerp(0.82,0.11,p);
     const cr = dom==='sky'?9 : dom==='ocean'?7 : dom==='road'?4.5 : 0;
     let needT = Math.max(0, Math.abs(x-L.x)-cr)/45;              // steer time from lane center
     if(isSky) needT = Math.max(needT, Math.max(0, Math.abs(y-vehicles.sky.y)-12)/34);
@@ -1290,7 +1206,7 @@ function tick(dt,t){
   if(running){ const p=1-timeLeft/90;
     const maxLive = p<0.3?1 : p<0.65?2 : 3;   // difficulty ramp: 1 → 2 → 3 concurrent signals
     nextSpawnIn-=dt;
-    if(liveCount()<maxLive && nextSpawnIn<=0){ spawnNext(); nextSpawnIn=lerp(1.7,0.25,p); } }
+    if(liveCount()<maxLive && nextSpawnIn<=0){ spawnNext(); nextSpawnIn=lerp(1.72,0.27,p); } }
 
   // HUD chips — incoming indicator + countdown on the mode that owns the live signal
   for(const d of DOMAINS){ const v=vehicles[d]; const el=domEls[d];
@@ -1431,6 +1347,7 @@ function endGame(){ if(ended)return; ended=true; running=false; musicOn(false);
 document.getElementById('startBtn').addEventListener('click',startGame);
 document.getElementById('replayBtn').addEventListener('click',startGame);
 document.getElementById('resumeBtn').addEventListener('click',togglePause);
+document.getElementById('startOverBtn').addEventListener('click',startGame);
 document.querySelector('.stat.time').addEventListener('click',()=>{ if(running) togglePause(); });
 document.getElementById('capBtn').addEventListener('click',()=>{ const n=capName.value.trim(),em=capEmail.value.trim(),note=document.getElementById('capNote');
   if(!em||em.indexOf('@')<1){note.textContent='Add a work email and we’ll set up your live demo.';note.style.color='#F9AC24';return;}
