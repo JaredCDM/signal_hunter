@@ -871,8 +871,12 @@ let active='road';
     if(!gltf||!lockupImg||!badgeImg) return;            // keep the procedural plane on any failure
     const jet=gltf.scene;
     let logos=null;
+    const engineBlack=new THREE.MeshStandardMaterial({color:0x17181b,metalness:0.45,roughness:0.32,envMapIntensity:1.2});
     jet.traverse(o=>{ if(!o.isMesh) return; o.castShadow=true;
-      if(((o.name||'')+(o.parent&&o.parent.name||'')).toLowerCase().includes('logo')) logos=o;
+      const nm=((o.name||'')+(o.parent&&o.parent.name||'')).toLowerCase();
+      if(nm.includes('logo')) logos=o;
+      // engine bodies go black; the fan/intake metals stay as authored
+      if(nm.includes('turbin') && o.material && o.material.name==='brushed_metal_shader') o.material=engineBlack;
       if(o.material && o.material.envMapIntensity===1) o.material.envMapIntensity=1.1; });
     // normalize: length 21 down +Z, centered
     const stage=new THREE.Group(); stage.add(jet); scene.add(stage); stage.updateMatrixWorld(true);
@@ -923,9 +927,11 @@ let active='road';
       g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
       g.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));
       g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2)); return g; };
+    const blackTex=()=>{ const c=document.createElement('canvas'); c.width=64; c.height=64;
+      const x=c.getContext('2d'); x.fillStyle='#181512'; x.fillRect(0,0,64,64); return dtex(c); };
     const decals=[];
     // fuselage centerline ≈ y−1 (fin skews the bbox)
-    const JET2={ lz:5.2, ly:-0.32, len:3.8, lh:0.8, sy:0.88, sz:-8.05, sl:2.1, sh:1.15 };
+    const JET2={ lz:5.2, ly:-0.32, len:3.8, lh:0.8, sy:0.88, sz:-8.05, sl:2.1, sh:1.15, kx:5.8, kz:-2.3, kw:1.35, kc:5.0 };
     function buildDecals(cfg){ Object.assign(JET2,cfg||{});
       for(const d of decals){ stage.remove(d); d.geometry.dispose(); } decals.length=0;
       const sp=stage.position.clone(), sr=stage.rotation.clone();
@@ -935,11 +941,14 @@ let active='road';
       const mk=(tex,pos,eul,sz,cullDir)=>{ let g=new DecalGeometry(fus,pos,eul,sz);
         if(cullDir) g=cullAway(g,cullDir);
         const m=new THREE.Mesh(g,mat(tex)); m.renderOrder=3; stage.add(m); decals.push(m); };
-      // shallow projectors: deep boxes wrap the titles over the fuselage crown
-      mk(lockupTex(1),  new THREE.Vector3( 1.55,JET2.ly,JET2.lz), new THREE.Euler(0, Math.PI/2,0), new THREE.Vector3(JET2.len,JET2.lh,1.2));
-      mk(lockupTex(1),  new THREE.Vector3(-1.55,JET2.ly,JET2.lz), new THREE.Euler(0,-Math.PI/2,0), new THREE.Vector3(JET2.len,JET2.lh,1.2)); // same canvas both sides — the opposed projectors already mirror
+      // box reaches well past the skin (~|x| 0.93) for clean projection, stops short of the crown top
+      mk(lockupTex(1),  new THREE.Vector3( 1.4,JET2.ly,JET2.lz), new THREE.Euler(0, Math.PI/2,0), new THREE.Vector3(JET2.len,JET2.lh,1.9));
+      mk(lockupTex(1),  new THREE.Vector3(-1.4,JET2.ly,JET2.lz), new THREE.Euler(0,-Math.PI/2,0), new THREE.Vector3(JET2.len,JET2.lh,1.9)); // same canvas both sides — the opposed projectors already mirror
       mk(stripesTex(1),  new THREE.Vector3( 0.7,JET2.sy,JET2.sz), new THREE.Euler(0, Math.PI/2,0), new THREE.Vector3(JET2.sl,JET2.sh,1.5), new THREE.Vector3(-1,0,0));
       mk(stripesTex(1),  new THREE.Vector3(-0.7,JET2.sy,JET2.sz), new THREE.Euler(0,-Math.PI/2,0), new THREE.Vector3(JET2.sl,JET2.sh,1.5), new THREE.Vector3( 1,0,0));
+      // thick black band across each wing's full chord (wing surface sits near y −1.5 at mid-span)
+      for(const s of [-1,1])
+        mk(blackTex(), new THREE.Vector3(JET2.kx*s,-0.9,JET2.kz), new THREE.Euler(-Math.PI/2,0,0), new THREE.Vector3(JET2.kw,JET2.kc,3.0));
       stage.position.copy(sp); stage.rotation.copy(sr); stage.updateMatrixWorld(true); }
     buildDecals();
     window.__jet=buildDecals; // TEMP tuning hook (remove before ship)
