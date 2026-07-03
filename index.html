@@ -138,17 +138,16 @@
   .tbtn:active{background:rgba(249,172,36,0.25);border-color:var(--amber);}
   body.touch #touch{display:block;}
   body.touch #hint{display:none;}
-  /* relative-drag steering (floating joystick) — shown in drag mode, replaces the button pads */
-  #dragpad{position:absolute;left:0;right:0;bottom:0;height:calc(3.2vh + 92px);z-index:6;display:none;}
+  /* permanent centered joystick — fixed base below the chip row, nub springs back to center on release */
+  #dragpad{position:absolute;left:0;right:0;bottom:0;height:calc(3.2vh + 122px);z-index:6;display:none;}
   body.touch.dragmode #dragpad{display:block;pointer-events:auto;}
   body.touch.dragmode #touch .pad{display:none;}
-  #dragpad .joyring,#dragpad .joynub{position:fixed;border-radius:50%;opacity:0;transition:opacity .12s;pointer-events:none;}
-  #dragpad .joyring{width:96px;height:96px;margin:-48px 0 0 -48px;border:1.5px solid rgba(249,172,36,0.55);background:rgba(20,20,20,0.3);}
-  #dragpad .joynub{width:46px;height:46px;margin:-23px 0 0 -23px;background:rgba(249,172,36,0.9);box-shadow:0 2px 14px rgba(0,0,0,.55);}
-  #dragpad.active .joyring,#dragpad.active .joynub{opacity:1;}
-  #dragpad .joyhint{position:absolute;left:0;right:0;bottom:calc(3.2vh + 34px);text-align:center;
-    font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--grey-2);opacity:.65;transition:opacity .2s;}
-  #dragpad.active .joyhint{opacity:0;}
+  #dragpad .joybase{position:absolute;left:50%;bottom:calc(3.2vh + 12px);transform:translateX(-50%);
+    width:104px;height:104px;border-radius:50%;border:2px solid rgba(249,172,36,0.5);
+    background:rgba(20,20,20,0.34);box-shadow:0 2px 16px rgba(0,0,0,.4);}
+  #dragpad .joynub{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;
+    background:rgba(249,172,36,0.92);box-shadow:0 3px 14px rgba(0,0,0,.5);transition:transform .1s ease-out;}
+  #dragpad.active .joynub{transition:none;}
   .ctrltoggle{display:none;margin-top:16px;font-family:var(--mono);font-size:11px;letter-spacing:1px;color:var(--grey-2);cursor:pointer;}
   .ctrltoggle b{color:var(--amber);}
   body.touch .ctrltoggle{display:block;}
@@ -166,8 +165,8 @@
   .panel h1 .am{color:var(--amber);}
   .lede{font-size:14px;line-height:1.6;color:var(--grey-2);max-width:470px;margin:0 auto 20px;}
   .lede b{color:var(--cream);font-weight:500;}
-  .legend{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;max-width:520px;margin:0 auto 24px;}
-  .lg{flex:1 1 110px;background:rgba(20,20,20,0.5);border:1px solid var(--line);padding:10px 8px;}
+  .legend{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:520px;margin:0 auto 24px;}
+  .lg{background:rgba(20,20,20,0.5);border:1px solid var(--line);padding:10px 8px;}
   .lg .h{font-family:var(--display);font-style:italic;font-size:18px;color:var(--cream);}
   .lg .k{font-size:9.5px;letter-spacing:1.5px;color:var(--grey-2);margin-top:3px;text-transform:uppercase;}
   .lg .kk{font-size:9px;color:var(--amber);margin-top:4px;}
@@ -203,7 +202,10 @@
     #stats{gap:5px;} .stat{padding:4px 9px;} .stat .v{font-size:17px;}
     /* stats slim on top; mode switcher lives at the BOTTOM in the thumb zone and doubles as the radar */
     #stats{left:12px;right:12px;justify-content:center;}
-    #domains{left:12px;right:12px;top:auto;bottom:calc(3.2vh + 96px);width:auto;max-width:none;flex-flow:row nowrap;gap:5px;}
+    #domains{left:12px;right:12px;top:auto;bottom:calc(3.2vh + 130px);width:auto;max-width:none;flex-flow:row nowrap;gap:5px;}
+    /* start-screen legend: equal 2×2 boxes, no keyboard hint on touch */
+    .legend{grid-template-columns:repeat(2,1fr);max-width:340px;}
+    .lg .kk{display:none;}
     .dom{flex:1;min-width:0;padding:6px 3px 8px;text-align:center;}
     .dom.live{transform:none;}
     .dom .row{justify-content:center;gap:4px;}
@@ -265,7 +267,7 @@
   <div class="pad steer"><div class="tbtn" data-k="left">◀</div><div class="tbtn" data-k="right">▶</div></div>
   <div class="pad alt"><div class="tbtn" data-k="up">▲</div><div class="tbtn" data-k="down">▼</div></div>
 </div>
-<div id="dragpad"><div class="joyring"></div><div class="joynub"></div><div class="joyhint">DRAG TO STEER · UP / DOWN = ALTITUDE</div></div>
+<div id="dragpad"><div class="joybase"><div class="joynub"></div></div></div>
 
 <!-- START -->
 <div class="overlay" id="startCard">
@@ -1184,18 +1186,20 @@ const touch={left:false,right:false,up:false,down:false,dragX:0,dragY:0};
 document.querySelectorAll('.tbtn').forEach(b=>{ const k=b.dataset.k;
   const on=e=>{e.preventDefault();touch[k]=true;}, off=e=>{e.preventDefault();touch[k]=false;};
   b.addEventListener('pointerdown',on); b.addEventListener('pointerup',off); b.addEventListener('pointerleave',off); b.addEventListener('pointercancel',off); });
-// relative-drag steering: a floating joystick that spawns wherever the thumb lands (drag mode)
+// permanent centered joystick: origin is the fixed base center; the nub tracks the thumb and springs back on release
 const dragpad=document.getElementById('dragpad');
-if(dragpad){ const ring=dragpad.querySelector('.joyring'), nub=dragpad.querySelector('.joynub');
-  const R=42; let oid=null, ox=0, oy=0;                     // R = px drag for full deflection
-  const place=(x,y)=>{ ring.style.left=ox+'px'; ring.style.top=oy+'px'; nub.style.left=x+'px'; nub.style.top=y+'px'; };
-  dragpad.addEventListener('pointerdown',e=>{ e.preventDefault(); oid=e.pointerId; ox=e.clientX; oy=e.clientY;
-    try{dragpad.setPointerCapture(oid);}catch(_){} dragpad.classList.add('active'); place(ox,oy); });
-  dragpad.addEventListener('pointermove',e=>{ if(e.pointerId!==oid) return; e.preventDefault();
-    const dx=e.clientX-ox, dy=e.clientY-oy, m=Math.hypot(dx,dy);
-    const vx=m>R?dx/m*R:dx, vy=m>R?dy/m*R:dy; place(ox+vx,oy+vy);      // nub rides clamped to the ring
-    touch.dragX=Math.max(-1,Math.min(1,dx/R)); touch.dragY=Math.max(-1,Math.min(1,dy/R)); });
-  const end=e=>{ if(oid!==null && e.pointerId!==oid) return; oid=null; dragpad.classList.remove('active'); touch.dragX=0; touch.dragY=0; };
+if(dragpad){ const base=dragpad.querySelector('.joybase'), nub=dragpad.querySelector('.joynub');
+  const R=46, DEAD=6; let oid=null, cx=0, cy=0;            // R = px offset for full deflection; DEAD = center dead zone
+  const recenter=()=>{ const r=base.getBoundingClientRect(); cx=r.left+r.width/2; cy=r.top+r.height/2; };
+  const set=(fx,fy)=>{ const dx=fx-cx, dy=fy-cy, m=Math.hypot(dx,dy);
+    const kx=m>R?dx/m*R:dx, ky=m>R?dy/m*R:dy; nub.style.transform='translate('+kx+'px,'+ky+'px)';  // nub clamped to base radius
+    touch.dragX=Math.abs(dx)<DEAD?0:Math.max(-1,Math.min(1,dx/R));
+    touch.dragY=Math.abs(dy)<DEAD?0:Math.max(-1,Math.min(1,dy/R)); };
+  dragpad.addEventListener('pointerdown',e=>{ e.preventDefault(); oid=e.pointerId; recenter();
+    try{dragpad.setPointerCapture(oid);}catch(_){} dragpad.classList.add('active'); set(e.clientX,e.clientY); });
+  dragpad.addEventListener('pointermove',e=>{ if(e.pointerId!==oid) return; e.preventDefault(); set(e.clientX,e.clientY); });
+  const end=e=>{ if(oid!==null && e.pointerId!==oid) return; oid=null; dragpad.classList.remove('active');
+    nub.style.transform=''; touch.dragX=0; touch.dragY=0; };
   dragpad.addEventListener('pointerup',end); dragpad.addEventListener('pointercancel',end); }
 // control-scheme toggle (drag vs buttons) — persists per device
 let dragMode=true; try{ dragMode=localStorage.getItem('sh_ctrl')!=='buttons'; }catch(_){}
