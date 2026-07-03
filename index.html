@@ -88,6 +88,15 @@
     border-radius:50%;background:rgba(20,20,20,0.55);border:1px solid var(--line);color:var(--cream);
     font-size:10px;letter-spacing:2px;align-items:center;justify-content:center;user-select:none;cursor:pointer;}
   #pauseBtn:active{border-color:var(--amber);color:var(--amber);}
+  #fsBtn{position:absolute;top:calc(3.2vh + 6px);right:20px;z-index:9;width:34px;height:34px;border-radius:50%;
+    background:rgba(20,20,20,0.5);border:1px solid var(--line);color:var(--grey-2);font-size:15px;line-height:1;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;pointer-events:auto;}
+  #fsBtn:hover{border-color:var(--amber);color:var(--amber);}
+  /* streak stat — shown only in free play */
+  .stat.streak{display:none;} .stat.streak .v{color:var(--amber);}
+  body.freeplay .stat.streak{display:block;}
+  @keyframes streakpop{0%{transform:scale(1);}30%{transform:scale(1.4);}100%{transform:scale(1);}}
+  .stat.streak.pop .v{animation:streakpop .32s ease-out;}
 
   /* ---- domain compass (right) ---- */
   /* desktop: mode boxes run along the BOTTOM in key order 1-4; big Podium numbers = the keys */
@@ -240,6 +249,7 @@
     #alert .a-type{font-size:15px;margin:0;}
     #alert .a-mode{font-size:8.5px;letter-spacing:1px;}
     #pauseBtn{display:flex;}
+    #fsBtn{right:58px;top:calc(3.2vh + 12px);width:32px;height:32px;} /* left of the pause button on mobile */
     .loglock .champlogo{width:190px;height:26px;}
     .lede{font-size:13px;}
   }
@@ -263,6 +273,7 @@
 <div id="stats">
   <div class="stat money"><div class="k">Pipeline</div><div class="v" id="hPipe">$0</div></div>
   <div class="stat"><div class="k">Signals</div><div class="v" id="hCaught">0</div></div>
+  <div class="stat streak" id="streakStat"><div class="k">Streak</div><div class="v" id="hStreak">0</div></div>
   <div class="stat time"><div class="k">Time</div><div class="v" id="hTime">90</div></div>
 </div>
 
@@ -279,6 +290,7 @@
 <div id="flash"></div>
 <div id="alert"><div class="a-kick">New signal detected</div><div class="a-type" id="alertType"></div><div class="a-mode" id="alertMode"></div></div>
 
+<div id="fsBtn" title="Fullscreen">⛶</div>
 <div id="pauseBtn">❚❚</div>
 <div id="touch">
   <div class="pad steer"><div class="tbtn" data-k="left">◀</div><div class="tbtn" data-k="right">▶</div></div>
@@ -1191,12 +1203,12 @@ function cueMiss(){ if(!actx) return; const t=actx.currentTime; try{
   o.connect(g); g.connect(filt); o.start(t); o.stop(t+0.35); }catch(e){} }
 
 // ================= HUD =================
-const hPipe=document.getElementById('hPipe'),hCaught=document.getElementById('hCaught'),hTime=document.getElementById('hTime');
+const hPipe=document.getElementById('hPipe'),hCaught=document.getElementById('hCaught'),hTime=document.getElementById('hTime'),hStreak=document.getElementById('hStreak');
 const wCount=document.getElementById('wCount'),warmlist=document.getElementById('warmlist');
 const domEls={}; document.querySelectorAll('.dom').forEach(el=>domEls[el.dataset.dom]=el);
 const subEls={sky:subSky,ocean:subOcean,road:subRoad,rail:subRail};
 const lifeEls={sky:lifeSky,ocean:lifeOcean,road:lifeRoad,rail:lifeRail};
-let pipeline=0,missedPipe=0,caught=0,missed=0,timeLeft=90,running=false,ended=false,paused=false,freePlay=false,elapsed=0;
+let pipeline=0,missedPipe=0,caught=0,missed=0,timeLeft=90,running=false,ended=false,paused=false,freePlay=false,elapsed=0,streak=0,bestStreak=0,lastStreakShown=-1;
 // difficulty dial p∈[0,1]: timed = ramp over 90s to the finish; free play = slower 180s warm-up,
 // then endless waves oscillating between medium (0.5) and full (1.0)
 function difficulty(){ if(!running) return 0;
@@ -1219,7 +1231,10 @@ function updateHUD(){ hPipe.textContent='$'+pipeline.toLocaleString();
   const resolved=caught+missed; // only signals that actually came and went — live ones don't count against you
   hCaught.textContent=resolved?caught+'/'+resolved:caught;
   if(freePlay){ hTime.textContent=Math.floor(elapsed/60)+':'+String(Math.floor(elapsed%60)).padStart(2,'0'); hTime.classList.remove('low'); }
-  else { hTime.textContent=Math.ceil(timeLeft); hTime.classList.toggle('low',timeLeft<=15); } }
+  else { hTime.textContent=Math.ceil(timeLeft); hTime.classList.toggle('low',timeLeft<=15); }
+  if(streak!==lastStreakShown){ hStreak.textContent=streak; const el=document.getElementById('streakStat');
+    if(streak>lastStreakShown){ el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); } // re-trigger the pop
+    lastStreakShown=streak; } }
 function addWarm(lead,score){ const d=document.createElement('div'); d.className='wlead'; d.innerHTML='<div class="nm">'+lead.name+' · '+score+'</div><div class="ti">'+lead.title+' · '+lead.co+'</div>'; warmlist.insertBefore(d,warmlist.firstChild); while(warmlist.children.length>6) warmlist.removeChild(warmlist.lastChild); wCount.textContent=caught; }
 
 const alertEl=document.getElementById('alert'),alertType=document.getElementById('alertType'),alertMode=document.getElementById('alertMode');
@@ -1237,8 +1252,15 @@ function flash(msg,color){ flashEl.textContent=msg; flashEl.style.color=color; f
 
 // ================= INPUT =================
 const keys={};
+// ---- fullscreen ----
+function toggleFullscreen(){ const d=document, el=d.documentElement;
+  if(d.fullscreenElement||d.webkitFullscreenElement){ (d.exitFullscreen||d.webkitExitFullscreen).call(d); }
+  else { (el.requestFullscreen||el.webkitRequestFullscreen).call(el); } }
+document.getElementById('fsBtn').addEventListener('click',toggleFullscreen);
+document.addEventListener('fullscreenchange',()=>{ document.getElementById('fsBtn').textContent=document.fullscreenElement?'🡖':'⛶'; });
 addEventListener('keydown',e=>{ keys[e.code]=true;
   if(e.code==='Space' && !e.repeat) togglePause();
+  if(e.code==='KeyF' && !e.repeat) toggleFullscreen();
   if(e.code==='Digit1')setActive('sky'); if(e.code==='Digit2')setActive('rail');
   if(e.code==='Digit3')setActive('road'); if(e.code==='Digit4')setActive('ocean');
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code))e.preventDefault();
@@ -1358,11 +1380,12 @@ function tick(dt,t){
         // so the huge ship collects the moment the signal reaches its bow, not mid-hull
         if(dz<(v.reachF||9) && dz>-(v.reachB||18) && dx<cr && dy<14){
           s.caught=true; const val=s.val, score=val/130; pipeline+=val; caught++;
+          streak++; if(streak>bestStreak) bestStreak=streak;
           addWarm(s.lead,score); burst(s.x,s.y,s.z); flash('SIGNAL CAPTURED  +$'+val.toLocaleString(),'#F9AC24');
           cueCatch(); fovPunch=5.5; shake=0.5; killSignal(s); }
       }
       if(!s.caught && (s.life<=0 || s.z - v.z < -((v.reachB||18)+8))){ // cold / past the stern
-        if(running){ missed++; missedPipe+=s.val; cueMiss(); flash('SIGNAL LOST','#E4572E'); }
+        if(running){ missed++; missedPipe+=s.val; streak=0; cueMiss(); flash('SIGNAL LOST','#E4572E'); }
         killSignal(s); }
     }
     signals[d]=arr.filter(s=>!s.dead);
@@ -1506,9 +1529,10 @@ const startCard=document.getElementById('startCard'),endCard=document.getElement
 function resetGame(){ for(const d of DOMAINS){ for(const s of signals[d]) if(!s.dead) killSignal(s); signals[d]=[]; }
   const st={sky:{x:0,y:60,z:40},ocean:{x:LANES.ocean.x,y:0.6,z:20},road:{x:LANES.road.x,y:0.3,z:60},rail:{x:LANES.rail.x,y:1.0,z:30}};
   for(const d of DOMAINS){ Object.assign(vehicles[d],st[d]); vehicles[d].steer=0; vehicles[d].roll=0; }
-  pipeline=0;missedPipe=0;caught=0;missed=0;timeLeft=90;elapsed=0;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; warmlist.innerHTML=''; wCount.textContent='0';
+  pipeline=0;missedPipe=0;caught=0;missed=0;timeLeft=90;elapsed=0;streak=0;bestStreak=0;lastStreakShown=-1;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; warmlist.innerHTML=''; wCount.textContent='0';
   setActive('road'); updateHUD(); }
 function startGame(fp){ freePlay=!!fp; initAudio(); resetGame(); startCard.classList.add('hidden'); endCard.classList.add('hidden');
+  document.body.classList.toggle('freeplay',freePlay);            // reveals the Streak stat
   document.querySelector('.stat.time .k').textContent = freePlay?'Elapsed':'Time';
   paused=false; document.getElementById('pausedOv').classList.add('hidden');
   running=true; if(actx&&actx.state==='suspended') actx.resume(); musicOn(true); musicFor(active); }
@@ -1519,7 +1543,7 @@ function endGame(){ if(ended)return; ended=true; running=false; paused=false;
   document.getElementById('ePipeMissed').textContent='$'+missedPipe.toLocaleString();
   const head=document.getElementById('endHead'),kick=document.getElementById('endKicker'),b1=document.getElementById('endBody1');
   const rate=caught/Math.max(1,caught+missed);
-  kick.textContent = freePlay ? 'Free play · session ended' : (rate>=0.99 ? 'Hunt complete · flawless read' : 'Hunt complete');
+  kick.textContent = freePlay ? ('Free play · best streak '+bestStreak) : (rate>=0.99 ? 'Hunt complete · flawless read' : 'Hunt complete');
   if(rate>=0.99){ head.innerHTML='EVERY SIGNAL <span class="am">CAPTURED.</span>';
     b1.textContent='You captured every signal by hand — at full sprint, across four modes. Nobody can keep that up forever.'; }
   else { head.innerHTML='YOU LEFT A LOT ON THE <span class="am">TABLE.</span>';
