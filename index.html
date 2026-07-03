@@ -963,9 +963,11 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
     let latest=0;
     for(const dd of DOMAINS) for(const s2 of signals[dd]) if(!s2.dead)
       latest=Math.max(latest,(s2.z-vehicles[dd].z)/vehicles[dd].speed);
-    // HARD RULE: consecutive passes land at least 2s apart — a human with perfect
-    // reflexes can always chain them; difficulty comes from sustaining it for 90s
-    const tNew=Math.max((z-v.z)/v.speed, latest + Math.max(needT + M, 2.0));
+    // HARD RULE: consecutive passes land at least 1.65s apart (the comfort floor —
+    // physical feasibility is already guaranteed by the needT term, so this can sit
+    // close to the human reaction limit; a perfect chain stays possible but demands
+    // near-max reads for 90s straight)
+    const tNew=Math.max((z-v.z)/v.speed, latest + Math.max(needT + M, 1.65));
     z = v.z + tNew*v.speed;
     if(z - v.z > 620) return null;                               // no fair slot yet — spawner retries shortly
   }
