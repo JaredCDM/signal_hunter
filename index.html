@@ -1352,11 +1352,13 @@ function tick(dt,t){
   // HUD chips — incoming indicator + countdown on the mode that owns the live signal
   for(const d of DOMAINS){ const v=vehicles[d]; const el=domEls[d];
     const s=signals[d].find(s=>!s.dead);
-    if(s){ const rf=v.reachF||9, toBody=(s.z-v.z)-rf;        // distance/time until it reaches the vehicle's front (= capturable)
-      const dz=Math.max(0,Math.round(toBody)), secs=Math.max(0,Math.floor(toBody/v.speed));
-      subEls[d].innerHTML='<b>◈ INCOMING · </b>'+dz+'m · '+secs+'s'; // reaches 0 as the signal meets the hull, then it's grabbable
-      lifeEls[d].style.width=Math.max(0,Math.min(100,(toBody/Math.max(1,s.dz0-rf))*100))+'%';
-      el.classList.add('live'); el.classList.toggle('urgent', toBody/v.speed<2 || s.life<2.5); }
+    if(s){ const dz=Math.max(0,Math.round(s.z-v.z));
+      // display pacing is unchanged by vehicle size: countdown/bar run to the original pass
+      // point (v.z), exactly as before — only the CATCH zone spans the whole hull
+      const secs=Math.max(0,Math.floor((s.z-v.z+18)/v.speed));
+      subEls[d].innerHTML='<b>◈ INCOMING · </b>'+dz+'m · '+secs+'s';
+      lifeEls[d].style.width=Math.max(0,Math.min(100,((s.z-v.z)/s.dz0)*100))+'%';
+      el.classList.add('live'); el.classList.toggle('urgent', (s.z-v.z+18)/v.speed<5); }
     else { subEls[d].textContent='— watching —'; lifeEls[d].style.width='0%'; el.classList.remove('live'); el.classList.remove('urgent'); }
   }
   updateHUD();
