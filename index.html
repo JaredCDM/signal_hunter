@@ -312,6 +312,7 @@
     <h1>TAKE A <span class="am">BREATH.</span></h1>
     <p class="lede">Capturing intent signals manually can be exhausting. Press <b>space</b>, or the button below, to get back out there.</p>
     <button class="btn" id="resumeBtn">Resume the hunt →</button>
+    <button class="btn ghost" id="modeBtn">Free play →</button>
     <button class="btn ghost replay" id="startOverBtn">Start over</button>
     <div class="ctrltoggle" id="ctrlToggle">Controls · <b id="ctrlLabel">Drag</b> — tap to switch</div>
   </div>
@@ -337,6 +338,7 @@
     </div>
     <p class="finewhy" id="capNote">See how we find who is leaning in.</p>
     <button class="btn ghost replay" id="replayBtn">Play again</button>
+    <button class="btn ghost" id="freeBtn">Free play →</button>
   </div>
 </div>
 
@@ -1012,7 +1014,7 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
           : L.x + (Math.random()<0.5?-1:1)*rand(L.halfW*0.3,L.halfW*0.75);
   // spawn distance scales with vehicle speed; both distance and life-buffer tighten as the hunt progresses,
   // so every signal stays catchable but the margin shrinks
-  const p=running?1-timeLeft/90:0;
+  const p=difficulty();
   const v=vehicles[dom]; let z = v.z + Math.min(560, v.speed*rand(lerp(3.6,1.6,p),lerp(4.4,1.95,p)));
   // ---- feasibility: schedule this pass AFTER every live signal, leaving time to switch + steer to it.
   // Guarantees a perfect chain always exists; M is the shrinking human-margin (the difficulty dial).
@@ -1183,8 +1185,17 @@ const wCount=document.getElementById('wCount'),warmlist=document.getElementById(
 const domEls={}; document.querySelectorAll('.dom').forEach(el=>domEls[el.dataset.dom]=el);
 const subEls={sky:subSky,ocean:subOcean,road:subRoad,rail:subRail};
 const lifeEls={sky:lifeSky,ocean:lifeOcean,road:lifeRoad,rail:lifeRail};
-let pipeline=0,missedPipe=0,caught=0,missed=0,timeLeft=90,running=false,ended=false,paused=false;
+let pipeline=0,missedPipe=0,caught=0,missed=0,timeLeft=90,running=false,ended=false,paused=false,freePlay=false,elapsed=0;
+// difficulty dial p∈[0,1]: timed = ramp over 90s to the finish; free play = slower 180s warm-up,
+// then endless waves oscillating between medium (0.5) and full (1.0)
+function difficulty(){ if(!running) return 0;
+  if(freePlay) return elapsed<180 ? elapsed/180 : 0.75 + 0.25*Math.cos((elapsed-180)*0.14);
+  return 1 - timeLeft/90; }
+function syncPauseButtons(){ const m=document.getElementById('modeBtn'), so=document.getElementById('startOverBtn');
+  if(m) m.textContent = freePlay?'End run →':'Free play →';
+  if(so) so.textContent = freePlay?'Switch to Timed Run':'Start over'; }
 function togglePause(){ if(!running) return; paused=!paused;
+  if(paused) syncPauseButtons();
   document.getElementById('pausedOv').classList.toggle('hidden',!paused);
   if(actx){ if(paused) actx.suspend(); else actx.resume(); } } // buffers freeze mid-note and resume in place
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && running && !paused) togglePause(); });
@@ -1196,7 +1207,8 @@ function setActive(d){ if(paused) return; const changed=d!==active;
 function updateHUD(){ hPipe.textContent='$'+pipeline.toLocaleString();
   const resolved=caught+missed; // only signals that actually came and went — live ones don't count against you
   hCaught.textContent=resolved?caught+'/'+resolved:caught;
-  hTime.textContent=Math.ceil(timeLeft); hTime.classList.toggle('low',timeLeft<=15); }
+  if(freePlay){ hTime.textContent=Math.floor(elapsed/60)+':'+String(Math.floor(elapsed%60)).padStart(2,'0'); hTime.classList.remove('low'); }
+  else { hTime.textContent=Math.ceil(timeLeft); hTime.classList.toggle('low',timeLeft<=15); } }
 function addWarm(lead,score){ const d=document.createElement('div'); d.className='wlead'; d.innerHTML='<div class="nm">'+lead.name+' · '+score+'</div><div class="ti">'+lead.title+' · '+lead.co+'</div>'; warmlist.insertBefore(d,warmlist.firstChild); while(warmlist.children.length>6) warmlist.removeChild(warmlist.lastChild); wCount.textContent=caught; }
 
 const alertEl=document.getElementById('alert'),alertType=document.getElementById('alertType'),alertMode=document.getElementById('alertMode');
@@ -1284,7 +1296,7 @@ function frame(){
 function tick(dt,t){
   if(paused){ composer.render(); return; } // frozen frame; nothing advances
   frames++; simT+=dt; if(t==null)t=simT;
-  if(running){ timeLeft-=dt; if(timeLeft<=0){timeLeft=0;endGame();} }
+  if(running){ if(freePlay) elapsed+=dt; else { timeLeft-=dt; if(timeLeft<=0){timeLeft=0;endGame();} } }
   botTick(dt);
 
   // vehicles
@@ -1346,7 +1358,7 @@ function tick(dt,t){
     }
     signals[d]=arr.filter(s=>!s.dead);
   }
-  if(running){ const p=1-timeLeft/90;
+  if(running){ const p=difficulty();
     const maxLive = p<0.18?1 : p<0.48?2 : 3;   // difficulty ramp: 1 → 2 → 3 concurrent signals
     nextSpawnIn-=dt;
     if(liveCount()<maxLive && nextSpawnIn<=0){ spawnNext(); nextSpawnIn=lerp(1.35,0.18,p); } }
@@ -1485,27 +1497,32 @@ const startCard=document.getElementById('startCard'),endCard=document.getElement
 function resetGame(){ for(const d of DOMAINS){ for(const s of signals[d]) if(!s.dead) killSignal(s); signals[d]=[]; }
   const st={sky:{x:0,y:60,z:40},ocean:{x:LANES.ocean.x,y:0.6,z:20},road:{x:LANES.road.x,y:0.3,z:60},rail:{x:LANES.rail.x,y:1.0,z:30}};
   for(const d of DOMAINS){ Object.assign(vehicles[d],st[d]); vehicles[d].steer=0; vehicles[d].roll=0; }
-  pipeline=0;missedPipe=0;caught=0;missed=0;timeLeft=90;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; warmlist.innerHTML=''; wCount.textContent='0';
+  pipeline=0;missedPipe=0;caught=0;missed=0;timeLeft=90;elapsed=0;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; warmlist.innerHTML=''; wCount.textContent='0';
   setActive('road'); updateHUD(); }
-function startGame(){ initAudio(); resetGame(); startCard.classList.add('hidden'); endCard.classList.add('hidden');
+function startGame(fp){ freePlay=!!fp; initAudio(); resetGame(); startCard.classList.add('hidden'); endCard.classList.add('hidden');
+  document.querySelector('.stat.time .k').textContent = freePlay?'Elapsed':'Time';
   paused=false; document.getElementById('pausedOv').classList.add('hidden');
   running=true; if(actx&&actx.state==='suspended') actx.resume(); musicOn(true); musicFor(active); }
-function endGame(){ if(ended)return; ended=true; running=false; musicOn(false);
+function endGame(){ if(ended)return; ended=true; running=false; paused=false;
+  document.getElementById('pausedOv').classList.add('hidden');
+  if(actx&&actx.state==='suspended') actx.resume(); musicOn(false);
   document.getElementById('eMissed').textContent=missed;
   document.getElementById('ePipeMissed').textContent='$'+missedPipe.toLocaleString();
   const head=document.getElementById('endHead'),kick=document.getElementById('endKicker'),b1=document.getElementById('endBody1');
   const rate=caught/Math.max(1,caught+missed);
-  kick.textContent = rate>=0.99 ? 'Hunt complete · flawless read' : 'Hunt complete';
+  kick.textContent = freePlay ? 'Free play · session ended' : (rate>=0.99 ? 'Hunt complete · flawless read' : 'Hunt complete');
   if(rate>=0.99){ head.innerHTML='EVERY SIGNAL <span class="am">CAPTURED.</span>';
     b1.textContent='You captured every signal by hand — at full sprint, across four modes. Nobody can keep that up forever.'; }
   else { head.innerHTML='YOU LEFT A LOT ON THE <span class="am">TABLE.</span>';
     b1.textContent='You chased four types of intent signals manually, leaving a lot on the table.'; }
   endCard.classList.remove('hidden'); }
 
-document.getElementById('startBtn').addEventListener('click',startGame);
-document.getElementById('replayBtn').addEventListener('click',startGame);
+document.getElementById('startBtn').addEventListener('click',()=>startGame(false));       // title = timed
+document.getElementById('replayBtn').addEventListener('click',()=>startGame(false));      // Play again = timed
 document.getElementById('resumeBtn').addEventListener('click',togglePause);
-document.getElementById('startOverBtn').addEventListener('click',startGame);
+document.getElementById('startOverBtn').addEventListener('click',()=>startGame(false));   // Start over / Switch to Timed Run
+document.getElementById('freeBtn').addEventListener('click',()=>startGame(true));         // end card → Free play
+document.getElementById('modeBtn').addEventListener('click',()=>{ if(freePlay) endGame(); else startGame(true); }); // pause: End run / Free play
 document.querySelector('.stat.time').addEventListener('click',()=>{ if(running) togglePause(); });
 document.getElementById('pauseBtn').addEventListener('click',()=>{ if(running) togglePause(); });
 document.getElementById('capBtn').addEventListener('click',()=>{ const n=capName.value.trim(),em=capEmail.value.trim(),note=document.getElementById('capNote');
