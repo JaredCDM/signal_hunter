@@ -138,6 +138,20 @@
   .tbtn:active{background:rgba(249,172,36,0.25);border-color:var(--amber);}
   body.touch #touch{display:block;}
   body.touch #hint{display:none;}
+  /* relative-drag steering (floating joystick) — shown in drag mode, replaces the button pads */
+  #dragpad{position:absolute;left:0;right:0;bottom:0;height:calc(3.2vh + 92px);z-index:6;display:none;}
+  body.touch.dragmode #dragpad{display:block;pointer-events:auto;}
+  body.touch.dragmode #touch .pad{display:none;}
+  #dragpad .joyring,#dragpad .joynub{position:fixed;border-radius:50%;opacity:0;transition:opacity .12s;pointer-events:none;}
+  #dragpad .joyring{width:96px;height:96px;margin:-48px 0 0 -48px;border:1.5px solid rgba(249,172,36,0.55);background:rgba(20,20,20,0.3);}
+  #dragpad .joynub{width:46px;height:46px;margin:-23px 0 0 -23px;background:rgba(249,172,36,0.9);box-shadow:0 2px 14px rgba(0,0,0,.55);}
+  #dragpad.active .joyring,#dragpad.active .joynub{opacity:1;}
+  #dragpad .joyhint{position:absolute;left:0;right:0;bottom:calc(3.2vh + 34px);text-align:center;
+    font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--grey-2);opacity:.65;transition:opacity .2s;}
+  #dragpad.active .joyhint{opacity:0;}
+  .ctrltoggle{display:none;margin-top:16px;font-family:var(--mono);font-size:11px;letter-spacing:1px;color:var(--grey-2);cursor:pointer;}
+  .ctrltoggle b{color:var(--amber);}
+  body.touch .ctrltoggle{display:block;}
 
   /* ---- overlays ---- */
   .overlay{position:absolute;inset:0;z-index:20;display:flex;align-items:flex-start;justify-content:center;padding:24px;
@@ -251,6 +265,7 @@
   <div class="pad steer"><div class="tbtn" data-k="left">◀</div><div class="tbtn" data-k="right">▶</div></div>
   <div class="pad alt"><div class="tbtn" data-k="up">▲</div><div class="tbtn" data-k="down">▼</div></div>
 </div>
+<div id="dragpad"><div class="joyring"></div><div class="joynub"></div><div class="joyhint">DRAG TO STEER · UP / DOWN = ALTITUDE</div></div>
 
 <!-- START -->
 <div class="overlay" id="startCard">
@@ -279,6 +294,7 @@
     <p class="lede">Capturing intent signals manually can be exhausting. Press <b>space</b>, or the button below, to get back out there.</p>
     <button class="btn" id="resumeBtn">Resume the hunt →</button>
     <button class="btn ghost replay" id="startOverBtn">Start over</button>
+    <div class="ctrltoggle" id="ctrlToggle">Controls · <b id="ctrlLabel">Drag</b> — tap to switch</div>
   </div>
 </div>
 
@@ -1164,10 +1180,32 @@ addEventListener('keyup',e=>{ keys[e.code]=false; });
 document.querySelectorAll('.dom').forEach(el=>el.addEventListener('click',()=>{ if(running)setActive(el.dataset.dom); }));
 // touch
 if(matchMedia('(pointer:coarse)').matches) document.body.classList.add('touch');
-const touch={left:false,right:false,up:false,down:false};
+const touch={left:false,right:false,up:false,down:false,dragX:0,dragY:0};
 document.querySelectorAll('.tbtn').forEach(b=>{ const k=b.dataset.k;
   const on=e=>{e.preventDefault();touch[k]=true;}, off=e=>{e.preventDefault();touch[k]=false;};
   b.addEventListener('pointerdown',on); b.addEventListener('pointerup',off); b.addEventListener('pointerleave',off); b.addEventListener('pointercancel',off); });
+// relative-drag steering: a floating joystick that spawns wherever the thumb lands (drag mode)
+const dragpad=document.getElementById('dragpad');
+if(dragpad){ const ring=dragpad.querySelector('.joyring'), nub=dragpad.querySelector('.joynub');
+  const R=42; let oid=null, ox=0, oy=0;                     // R = px drag for full deflection
+  const place=(x,y)=>{ ring.style.left=ox+'px'; ring.style.top=oy+'px'; nub.style.left=x+'px'; nub.style.top=y+'px'; };
+  dragpad.addEventListener('pointerdown',e=>{ e.preventDefault(); oid=e.pointerId; ox=e.clientX; oy=e.clientY;
+    try{dragpad.setPointerCapture(oid);}catch(_){} dragpad.classList.add('active'); place(ox,oy); });
+  dragpad.addEventListener('pointermove',e=>{ if(e.pointerId!==oid) return; e.preventDefault();
+    const dx=e.clientX-ox, dy=e.clientY-oy, m=Math.hypot(dx,dy);
+    const vx=m>R?dx/m*R:dx, vy=m>R?dy/m*R:dy; place(ox+vx,oy+vy);      // nub rides clamped to the ring
+    touch.dragX=Math.max(-1,Math.min(1,dx/R)); touch.dragY=Math.max(-1,Math.min(1,dy/R)); });
+  const end=e=>{ if(oid!==null && e.pointerId!==oid) return; oid=null; dragpad.classList.remove('active'); touch.dragX=0; touch.dragY=0; };
+  dragpad.addEventListener('pointerup',end); dragpad.addEventListener('pointercancel',end); }
+// control-scheme toggle (drag vs buttons) — persists per device
+let dragMode=true; try{ dragMode=localStorage.getItem('sh_ctrl')!=='buttons'; }catch(_){}
+function applyCtrl(){ document.body.classList.toggle('dragmode',dragMode);
+  const l=document.getElementById('ctrlLabel'); if(l) l.textContent=dragMode?'Drag':'Buttons'; }
+applyCtrl();
+const ctrlToggle=document.getElementById('ctrlToggle');
+if(ctrlToggle) ctrlToggle.addEventListener('click',()=>{ dragMode=!dragMode;
+  try{ localStorage.setItem('sh_ctrl',dragMode?'drag':'buttons'); }catch(_){}
+  touch.left=touch.right=touch.up=touch.down=false; touch.dragX=touch.dragY=0; applyCtrl(); });
 
 // TEMP calibration bot — plays through the real key/steering path (remove before real go-live)
 let botOn=false,botDelay=0,botWait=0,botKey=null;
@@ -1211,10 +1249,12 @@ function tick(dt,t){
     if(d==='rail'){ // a train can't leave its rails — no lateral steering
       v.x=L.x;
     } else if(d===active && running){ if(keys['ArrowLeft']||keys['KeyA']||touch.left)steer+=1; if(keys['ArrowRight']||keys['KeyD']||touch.right)steer-=1;
-      if(d==='sky'){ if(keys['ArrowUp']||keys['KeyW']||touch.up)alt+=1; if(keys['ArrowDown']||keys['KeyS']||touch.down)alt-=1; }
+      steer-=touch.dragX;                                    // drag: finger-right = steer screen-right (proportional)
+      if(d==='sky'){ if(keys['ArrowUp']||keys['KeyW']||touch.up)alt+=1; if(keys['ArrowDown']||keys['KeyS']||touch.down)alt-=1; alt-=touch.dragY; }
     } else { // autopilot eases back toward lane center
       v.x += (L.x - v.x)*Math.min(1,dt*0.9);
     }
+    steer=Math.max(-1,Math.min(1,steer)); alt=Math.max(-1,Math.min(1,alt)); // drag feeds continuous input; keep in range
     // eased steering — input ramps in and out, so lateral motion, yaw and lean flow together
     v.sm += (steer-v.sm)*Math.min(1,dt*4.5);
     v.smA += (alt-v.smA)*Math.min(1,dt*4.5);
