@@ -902,20 +902,44 @@ let active='road';
       x.drawImage(ink,(1024-lw)/2,(256-lh)/2,lw,lh); x.restore(); return dtex(c); };
     const badgeTex=()=>{ const c=document.createElement('canvas'); c.width=256; c.height=256;
       c.getContext('2d').drawImage(inkBadge,0,0,256,256); return dtex(c); };
+    // tail speed-stripes: the badge's three stepped wing bars, sweeping backward on BOTH fin sides
+    const stripesTex=side=>{ const c=document.createElement('canvas'); c.width=512; c.height=320; const x=c.getContext('2d');
+      x.save(); if(side<0){ x.translate(512,0); x.scale(-1,1); }
+      x.fillStyle='#181512';
+      // three bars, stepped shorter toward the bottom, right ends sheared along a common diagonal (like the badge)
+      const bars=[[36,470],[118,392],[200,314]], bh=56, shear=64;
+      for(const [by,bx] of bars){ x.beginPath();
+        x.moveTo(26,by+bh*0.5); x.arc(26+bh*0.5,by+bh*0.5,bh*0.5,Math.PI*0.5,Math.PI*1.5); // rounded left tip
+        x.lineTo(bx,by); x.lineTo(bx-shear,by+bh); x.lineTo(26+bh*0.5,by+bh); x.closePath(); x.fill(); }
+      x.restore(); return dtex(c); };
+    // keep only the faces looking at the projector — a thin fin otherwise gets a mirrored copy on its far side
+    const cullAway=(geo,dir)=>{ const p=geo.attributes.position,n=geo.attributes.normal,u=geo.attributes.uv;
+      const P=[],N=[],U=[];
+      for(let i=0;i<p.count;i+=3){
+        const d=(n.getX(i)+n.getX(i+1)+n.getX(i+2))*dir.x+(n.getY(i)+n.getY(i+1)+n.getY(i+2))*dir.y+(n.getZ(i)+n.getZ(i+1)+n.getZ(i+2))*dir.z;
+        if(d>=0) continue;
+        for(let k=0;k<3;k++){ P.push(p.getX(i+k),p.getY(i+k),p.getZ(i+k)); N.push(n.getX(i+k),n.getY(i+k),n.getZ(i+k)); U.push(u.getX(i+k),u.getY(i+k)); } }
+      const g=new THREE.BufferGeometry();
+      g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
+      g.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));
+      g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2)); return g; };
     const decals=[];
-    const JET2={ lz:5.2, ly:-0.32, len:5.5, lh:1.15, by:1.05, bz:-7.85, bs:1.2 }; // tuned against the model (fuselage centerline ≈ y−1, raked T-tail fin)
+    // fuselage centerline ≈ y−1 (fin skews the bbox)
+    const JET2={ lz:5.2, ly:-0.32, len:3.8, lh:0.8, sy:0.88, sz:-8.05, sl:2.1, sh:1.15 };
     function buildDecals(cfg){ Object.assign(JET2,cfg||{});
       for(const d of decals){ stage.remove(d); d.geometry.dispose(); } decals.length=0;
       const sp=stage.position.clone(), sr=stage.rotation.clone();
       stage.position.set(0,0,0); stage.rotation.set(0,0,0); stage.updateMatrixWorld(true);
-      const mk=(tex,pos,rotY,sz)=>{ const m=new THREE.Mesh(
-          new DecalGeometry(fus,pos,new THREE.Euler(0,rotY,0),sz),
-          new THREE.MeshStandardMaterial({map:tex,transparent:true,depthTest:true,depthWrite:false,
-            polygonOffset:true,polygonOffsetFactor:-4,roughness:0.5,metalness:0.1}));
-        m.renderOrder=3; stage.add(m); decals.push(m); };
-      mk(lockupTex(1),  new THREE.Vector3( 1.4,JET2.ly,JET2.lz),  Math.PI/2, new THREE.Vector3(JET2.len,JET2.lh,2.4));
-      mk(lockupTex(-1), new THREE.Vector3(-1.4,JET2.ly,JET2.lz), -Math.PI/2, new THREE.Vector3(JET2.len,JET2.lh,2.4));
-      mk(badgeTex(), new THREE.Vector3(0,JET2.by,JET2.bz), Math.PI/2, new THREE.Vector3(JET2.bs,JET2.bs,1.2));
+      const mat=tex=>new THREE.MeshStandardMaterial({map:tex,transparent:true,depthTest:true,depthWrite:false,
+        polygonOffset:true,polygonOffsetFactor:-4,roughness:0.5,metalness:0.1});
+      const mk=(tex,pos,eul,sz,cullDir)=>{ let g=new DecalGeometry(fus,pos,eul,sz);
+        if(cullDir) g=cullAway(g,cullDir);
+        const m=new THREE.Mesh(g,mat(tex)); m.renderOrder=3; stage.add(m); decals.push(m); };
+      // shallow projectors: deep boxes wrap the titles over the fuselage crown
+      mk(lockupTex(1),  new THREE.Vector3( 1.55,JET2.ly,JET2.lz), new THREE.Euler(0, Math.PI/2,0), new THREE.Vector3(JET2.len,JET2.lh,1.2));
+      mk(lockupTex(1),  new THREE.Vector3(-1.55,JET2.ly,JET2.lz), new THREE.Euler(0,-Math.PI/2,0), new THREE.Vector3(JET2.len,JET2.lh,1.2)); // same canvas both sides — the opposed projectors already mirror
+      mk(stripesTex(1),  new THREE.Vector3( 0.7,JET2.sy,JET2.sz), new THREE.Euler(0, Math.PI/2,0), new THREE.Vector3(JET2.sl,JET2.sh,1.5), new THREE.Vector3(-1,0,0));
+      mk(stripesTex(1),  new THREE.Vector3(-0.7,JET2.sy,JET2.sz), new THREE.Euler(0,-Math.PI/2,0), new THREE.Vector3(JET2.sl,JET2.sh,1.5), new THREE.Vector3( 1,0,0));
       stage.position.copy(sp); stage.rotation.copy(sr); stage.updateMatrixWorld(true); }
     buildDecals();
     window.__jet=buildDecals; // TEMP tuning hook (remove before ship)
