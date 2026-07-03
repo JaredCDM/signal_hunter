@@ -1125,7 +1125,9 @@ function togglePause(){ if(!running) return; paused=!paused;
   if(actx){ if(paused) actx.suspend(); else actx.resume(); } } // buffers freeze mid-note and resume in place
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && running && !paused) togglePause(); });
 
-function setActive(d){ if(paused) return; const changed=d!==active; active=d; for(const k in domEls) domEls[k].classList.toggle('active',k===d);
+function setActive(d){ if(paused) return; const changed=d!==active;
+  if(changed && running){ swFrom.copy(camera.position); swDir=Math.sign(LANES[d].x-LANES[active].x); swT=0; } // whip-pan: fixed beat from wherever the camera is now
+  active=d; for(const k in domEls) domEls[k].classList.toggle('active',k===d);
   if(changed && actx && running) musicFor(d); }
 function updateHUD(){ hPipe.textContent='$'+pipeline.toLocaleString();
   const resolved=caught+missed; // only signals that actually came and went — live ones don't count against you
@@ -1186,6 +1188,7 @@ const clock=new THREE.Clock();
 const camPos=new THREE.Vector3(), camLook=new THREE.Vector3(), sunNDC=new THREE.Vector3();
 
 let frames=0, simT=0, fovPunch=0, shake=0;
+let swT=1, swDir=0; const swFrom=new THREE.Vector3(); // mode-switch whip-pan: fixed 0.42s beat, eased
 function frame(){
   requestAnimationFrame(frame);
   tick(Math.min(clock.getDelta(),0.05), clock.elapsedTime);
@@ -1298,14 +1301,25 @@ function tick(dt,t){
   const drX=Math.sin(simT*0.31)*0.55+Math.sin(simT*0.117+1.7)*0.35;
   const drY=Math.sin(simT*0.23+0.8)*0.28+Math.sin(simT*0.071+3.1)*0.18;
   camPos.set(v.x + (active==='sky'?0:5) + drX, yy+height+drY, v.z - behind);
-  camera.position.lerp(camPos, Math.min(1,dt*3.2));
+  // mode switch = fixed-beat whip-pan (0.42s, ease-out) — same rhythm whatever the distance,
+  // so the hands learn "switch, one beat, steer"; outside the whip, the usual lazy chase lerp
+  if(swT<1) swT=Math.min(1,swT+dt/0.42);
+  const sw=1-Math.pow(1-swT,3);
+  if(sw<1) camera.position.lerpVectors(swFrom,camPos,sw);
+  else camera.position.lerp(camPos, Math.min(1,dt*3.2));
   if(shake>0.01){ camera.position.x+=Math.sin(simT*43)*shake*0.28; camera.position.y+=Math.cos(simT*57)*shake*0.2; shake*=Math.pow(0.01,dt); }
   camLook.set(v.x + drX*0.35, yy+(active==='sky'?2:(active==='ocean'?4:5)), v.z + (active==='ocean'?42:55));
+  if(sw<1){ // while the whip flies, frame the incoming signal so you land already oriented
+    let tgt=null,bz=1e9; for(const s of signals[active]) if(!s.dead && s.z<bz){ bz=s.z; tgt=s; }
+    if(tgt){ const w=(1-sw)*0.65;
+      camLook.x+=(tgt.x-camLook.x)*w; camLook.y+=(tgt.y-camLook.y)*w*0.5; camLook.z+=(tgt.z-camLook.z)*w; } }
   camera.lookAt(camLook);
-  camera.rotateZ(v.roll*0.16 + Math.sin(simT*0.19)*0.008); // lean into the vehicle's bank
+  camera.rotateZ(v.roll*0.16 + Math.sin(simT*0.19)*0.008
+    + swDir*Math.sin(sw*Math.PI)*0.05); // lean into the bank + a whip roll that peaks mid-pan
 
   // per-mode focal length (road/rail run longer lenses) + catch punch + push-in tension
-  const fovT=({road:52,rail:53.5,ocean:55,sky:58})[active] + fovPunch - push*0.35;
+  const fovT=({road:52,rail:53.5,ocean:55,sky:58})[active] + fovPunch - push*0.35
+    + Math.sin(sw*Math.PI)*6; // brief wide-angle swell mid-whip, settles with the pan
   camera.fov += (fovT-camera.fov)*Math.min(1,dt*5); camera.updateProjectionMatrix();
   if(fovPunch>0.02) fovPunch*=Math.pow(0.02,dt); else fovPunch=0;
 
