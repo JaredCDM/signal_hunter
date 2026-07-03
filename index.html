@@ -913,6 +913,7 @@ new GLTFLoader().loadAsync('assets/champion-jet3.glb').catch(()=>null).then(gltf
   const ctr=new THREE.Box3().setFromObject(jet).getCenter(new THREE.Vector3());
   jet.position.sub(ctr); stage.updateMatrixWorld(true);
   stage.userData.blink=[];                                 // no added lights — model strictly as authored
+  { const R=new THREE.Box3().setFromObject(jet); vehicles.sky.reachF=R.max.z+2; vehicles.sky.reachB=-R.min.z+2; }
   const old=vehicles.sky.mesh; scene.remove(old);
   stage.position.copy(old.position); vehicles.sky.mesh=stage;
 });
@@ -935,6 +936,7 @@ new GLTFLoader().loadAsync('assets/champion-ship.glb').catch(()=>null).then(gltf
   stage.userData.blink=[];
   const bb2=new THREE.Box3().setFromObject(stage);
   blinker(stage,0,bb2.max.y+0.25,-42,0xffffff,3,0);        // masthead strobe (mast ~-42 on the doubled hull)
+  vehicles.ocean.reachF=bb2.max.z+2; vehicles.ocean.reachB=-bb2.min.z+2; // signals count anywhere over the hull (bow→stern)
   const old=vehicles.ocean.mesh; scene.remove(old);
   stage.position.copy(old.position); vehicles.ocean.mesh=stage;
 });
@@ -963,6 +965,7 @@ new GLTFLoader().loadAsync('assets/champion-train.glb').catch(()=>null).then(glt
   const len=bb.max.z-bb.min.z;
   stage.userData.shadowDZ=14-len/2;                       // ground shadow centered under the whole consist
   blobs.rail.scale.set(((bb.max.x-bb.min.x)*2.2)/7.5,(len+6)/66,1);
+  { const R=new THREE.Box3().setFromObject(train); vehicles.rail.reachF=R.max.z+2; vehicles.rail.reachB=-R.min.z+2; }
   const old=vehicles.rail.mesh; scene.remove(old);
   stage.position.copy(old.position); vehicles.rail.mesh=stage;
 });
@@ -984,6 +987,7 @@ new GLTFLoader().loadAsync('assets/champion-truck.glb').catch(()=>null).then(glt
   stage.updateMatrixWorld(true);
   stage.userData.blink=[];
   blobs.road.scale.set(((bb.max.x-bb.min.x)*1.5)/7.5,((bb.max.z-bb.min.z)+5)/23,1); // shadow tracks the bigger footprint
+  { const R=new THREE.Box3().setFromObject(truck); vehicles.road.reachF=R.max.z+2; vehicles.road.reachB=-R.min.z+2; }
   const old=vehicles.road.mesh; scene.remove(old);
   stage.position.copy(old.position); vehicles.road.mesh=stage;
 });
@@ -1044,8 +1048,8 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   grp.userData.rings=rings; grp.userData.core=core;
   grp.position.set(x,y,z);
   scene.add(grp);
-  // life ends at the exact moment the catch window closes (18m behind the dot) — the countdown never lies
-  const life=(z-v.z+18)/v.speed;
+  // life ends when the signal clears the back of the vehicle (its whole length is a catch zone)
+  const life=(z-v.z+(v.reachB||18))/v.speed;
   return {dom,grp,x,y,z,life,maxLife:life,dz0:z-v.z,lead:genLead(),val:Math.round(rand(64,96))*130,dead:false,caught:false,t:rand(0,10)};
 }
 // signals dealt from a shuffled bag (fair mode mix, max one per mode);
@@ -1327,12 +1331,14 @@ function tick(dt,t){
       // collect check for active vehicle
       if(d===active){ const dz=s.z-v.z; const dx=Math.abs(s.x-v.x); const dy=d==='sky'?Math.abs(s.y-v.y):0;
         const cr = d==='sky'?11 : d==='ocean'?8 : d==='road'?5.5 : 11;
-        if(dz<9 && dz>-18 && dx<cr && dy<14){ // caught
+        // caught the instant the signal touches ANY part of the vehicle (front reach → back reach),
+        // so the huge ship collects the moment the signal reaches its bow, not mid-hull
+        if(dz<(v.reachF||9) && dz>-(v.reachB||18) && dx<cr && dy<14){
           s.caught=true; const val=s.val, score=val/130; pipeline+=val; caught++;
           addWarm(s.lead,score); burst(s.x,s.y,s.z); flash('SIGNAL CAPTURED  +$'+val.toLocaleString(),'#F9AC24');
           cueCatch(); fovPunch=5.5; shake=0.5; killSignal(s); }
       }
-      if(!s.caught && (s.life<=0 || s.z - v.z < -40)){ // cold / passed
+      if(!s.caught && (s.life<=0 || s.z - v.z < -((v.reachB||18)+8))){ // cold / past the stern
         if(running){ missed++; missedPipe+=s.val; cueMiss(); flash('SIGNAL LOST','#E4572E'); }
         killSignal(s); }
     }
@@ -1346,10 +1352,11 @@ function tick(dt,t){
   // HUD chips — incoming indicator + countdown on the mode that owns the live signal
   for(const d of DOMAINS){ const v=vehicles[d]; const el=domEls[d];
     const s=signals[d].find(s=>!s.dead);
-    if(s){ const dz=Math.max(0,Math.round(s.z-v.z));
-      subEls[d].innerHTML='<b>◈ INCOMING · </b>'+dz+'m · '+Math.max(0,Math.floor(s.life))+'s'; // floor: the display reaches 0 before the signal dies
-      lifeEls[d].style.width=Math.max(0,Math.min(100,((s.z-v.z)/s.dz0)*100))+'%'; // bar = distance-to-pass; empty exactly as the dot reaches you
-      el.classList.add('live'); el.classList.toggle('urgent', s.life<5); }
+    if(s){ const rf=v.reachF||9, toBody=(s.z-v.z)-rf;        // distance/time until it reaches the vehicle's front (= capturable)
+      const dz=Math.max(0,Math.round(toBody)), secs=Math.max(0,Math.floor(toBody/v.speed));
+      subEls[d].innerHTML='<b>◈ INCOMING · </b>'+dz+'m · '+secs+'s'; // reaches 0 as the signal meets the hull, then it's grabbable
+      lifeEls[d].style.width=Math.max(0,Math.min(100,(toBody/Math.max(1,s.dz0-rf))*100))+'%';
+      el.classList.add('live'); el.classList.toggle('urgent', toBody/v.speed<2 || s.life<2.5); }
     else { subEls[d].textContent='— watching —'; lifeEls[d].style.width='0%'; el.classList.remove('live'); el.classList.remove('urgent'); }
   }
   updateHUD();
