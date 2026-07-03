@@ -114,8 +114,8 @@
   @keyframes freshp{50%{background:rgba(249,172,36,0.26);}}
   .dom.fresh{animation:freshp 0.5s ease-in-out 4;}
   .dom.active .nm{color:var(--amber);}
-  .dom .bar-life{position:absolute;left:0;bottom:0;height:2px;background:var(--amber);width:0%;transition:width .1s linear;}
-  .dom.urgent .bar-life{background:var(--red);}
+  .dom .bar-life{position:absolute;left:0;top:0;height:6px;background:var(--amber);width:0%;transition:width .1s linear, background .15s;}
+  .dom.crit .bar-life{background:var(--red);} /* gold meter; reds only in the final second */
 
   /* ---- warm list ---- */
   #warm{position:absolute;top:calc(3.2vh + 52px);right:20px;z-index:8;width:210px;pointer-events:none;}
@@ -1360,8 +1360,9 @@ function tick(dt,t){
       const secs=Math.max(0,Math.floor((s.z-v.z+18)/v.speed));
       subEls[d].innerHTML='<b>◈ INCOMING · </b>'+dz+'m · '+secs+'s';
       lifeEls[d].style.width=Math.max(0,Math.min(100,((s.z-v.z)/s.dz0)*100))+'%';
-      el.classList.add('live'); el.classList.toggle('urgent', (s.z-v.z+18)/v.speed<5); }
-    else { subEls[d].textContent='— watching —'; lifeEls[d].style.width='0%'; el.classList.remove('live'); el.classList.remove('urgent'); }
+      el.classList.add('live'); el.classList.toggle('urgent', (s.z-v.z+18)/v.speed<5);
+      el.classList.toggle('crit', (s.z-v.z)/v.speed<1); }              // meter reds only in the final second
+    else { subEls[d].textContent='— watching —'; lifeEls[d].style.width='0%'; el.classList.remove('live'); el.classList.remove('urgent'); el.classList.remove('crit'); }
   }
   updateHUD();
 
