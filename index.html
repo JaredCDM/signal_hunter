@@ -920,13 +920,13 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   const y = isSky ? rand(L.alt[0]+6,L.alt[1]-6) : L.y;
   // rail signals sit on the track (train can't swerve); road/ocean spawn off-center so steering matters
   const x = dom==='rail'  ? L.x
-          : dom==='road'  ? L.x + (Math.random()<0.5?-1:1)*rand(7,L.halfW*0.9)
-          : dom==='ocean' ? L.x + (Math.random()<0.5?-1:1)*rand(10.5,L.halfW*0.65)
-          : L.x + rand(-L.halfW*0.5,L.halfW*0.5);
+          : dom==='road'  ? L.x + (Math.random()<0.5?-1:1)*rand(8,L.halfW*0.95)
+          : dom==='ocean' ? L.x + (Math.random()<0.5?-1:1)*rand(14,L.halfW*0.8)
+          : L.x + (Math.random()<0.5?-1:1)*rand(L.halfW*0.25,L.halfW*0.7);
   // spawn distance scales with vehicle speed; both distance and life-buffer tighten as the hunt progresses,
   // so every signal stays catchable but the margin shrinks
   const p=running?1-timeLeft/90:0;
-  const v=vehicles[dom]; let z = v.z + Math.min(560, v.speed*rand(lerp(4.5,2.1,p),lerp(5.5,2.55,p)));
+  const v=vehicles[dom]; let z = v.z + Math.min(560, v.speed*rand(lerp(4.0,1.85,p),lerp(4.9,2.25,p)));
   // ---- feasibility: schedule this pass AFTER every live signal, leaving time to switch + steer to it.
   // Guarantees a perfect chain always exists; M is the shrinking human-margin (the difficulty dial).
   { const M=lerp(0.82,0.11,p);
@@ -1225,9 +1225,9 @@ function tick(dt,t){
     signals[d]=arr.filter(s=>!s.dead);
   }
   if(running){ const p=1-timeLeft/90;
-    const maxLive = p<0.3?1 : p<0.65?2 : 3;   // difficulty ramp: 1 → 2 → 3 concurrent signals
+    const maxLive = p<0.22?1 : p<0.55?2 : 3;   // difficulty ramp: 1 → 2 → 3 concurrent signals
     nextSpawnIn-=dt;
-    if(liveCount()<maxLive && nextSpawnIn<=0){ spawnNext(); nextSpawnIn=lerp(1.72,0.27,p); } }
+    if(liveCount()<maxLive && nextSpawnIn<=0){ spawnNext(); nextSpawnIn=lerp(1.5,0.22,p); } }
 
   // HUD chips — incoming indicator + countdown on the mode that owns the live signal
   for(const d of DOMAINS){ const v=vehicles[d]; const el=domEls[d];
