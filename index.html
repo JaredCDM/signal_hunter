@@ -952,6 +952,26 @@ new GLTFLoader().loadAsync('assets/champion-train.glb').catch(()=>null).then(glt
   stage.position.copy(old.position); vehicles.rail.mesh=stage;
 });
 
+// ---------- Champion semi truck (Jared's GLB, pre-branded textures) ----------
+new GLTFLoader().loadAsync('assets/champion-truck.glb').catch(()=>null).then(gltf=>{
+  if(!gltf) return;                                        // procedural truck stays as fallback
+  const truck=gltf.scene;
+  truck.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true;
+    if(o.material && o.material.envMapIntensity===1) o.material.envMapIntensity=0.95; } });
+  const stage=new THREE.Group(); stage.add(truck); scene.add(stage); stage.updateMatrixWorld(true);
+  // authored facing +Z with the cab already at the +Z end — no yaw needed
+  const size=new THREE.Box3().setFromObject(truck).getSize(new THREE.Vector3());
+  truck.scale.setScalar(24/size.z); stage.updateMatrixWorld(true);
+  const bb=new THREE.Box3().setFromObject(truck);
+  truck.position.x-=(bb.min.x+bb.max.x)/2;                 // center on the lane
+  truck.position.z+=6-bb.max.z;                            // cab leads the catch point, trailer trails behind
+  truck.position.y-=bb.min.y;                              // wheels rest on the road surface
+  stage.updateMatrixWorld(true);
+  stage.userData.blink=[];
+  const old=vehicles.road.mesh; scene.remove(old);
+  stage.position.copy(old.position); vehicles.road.mesh=stage;
+});
+
 // ================= SIGNALS =================
 const signals={sky:[],ocean:[],road:[],rail:[]};
 // signal markers are gameplay UI — fog:false so they stay legible at range instead of fading into the haze
