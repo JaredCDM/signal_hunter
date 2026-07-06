@@ -210,6 +210,16 @@
     animation:goldshimmer 2.6s linear infinite;}
   @keyframes goldshimmer{to{background-position:-220% center;}}
   #endStats .es .k{font-size:9px;letter-spacing:2px;color:var(--grey-2);margin-top:6px;text-transform:uppercase;}
+  /* the receipts: named leads who went cold, with the buying action you missed */
+  #coldList{margin:-8px 0 20px;text-align:left;}
+  #coldList.hidden{display:none;}
+  #coldList .clh{font-size:9px;letter-spacing:2.5px;color:var(--red);text-transform:uppercase;font-weight:700;margin-bottom:7px;}
+  #coldList .cl{border-left:2px solid var(--red);background:rgba(228,87,46,0.06);padding:6px 10px;margin-bottom:4px;
+    font-family:var(--mono);font-size:11px;line-height:1.45;color:var(--cream);}
+  #coldList .cl b{color:var(--cream);}
+  #coldList .cl .act{color:var(--amber);}
+  #coldList .cl .who{color:var(--grey-2);}
+  #coldList .cl .lost{float:right;color:var(--red);font-weight:700;}
   .handoff{font-size:13.5px;line-height:1.6;color:var(--grey-2);max-width:470px;margin:0 auto 12px;}
   .handoff.last{margin-bottom:20px;}
   .handoff b{color:var(--cream);font-weight:500;}
@@ -310,6 +320,7 @@
     <h1>SIGNAL <span class="am">HUNTER</span></h1>
     <p class="lede">Your buyers are broadcasting intent across all of their digital touchpoints. Knowing how to capture these signals is the difference between <b>sustainable growth</b> and flying blind.</p>
     <p class="lede">Roam across <b>land, air, and sea</b> to bring them in. Each mode hunts one type of signal, and you can only pilot one at a time. Read where the signal is firing, switch to the right mode, and capture the signal before it goes cold.</p>
+    <p class="lede">Every signal is a <b>real buying action</b> — a pricing page revisited, a proposal reopened, a funding announcement. Catch it and it becomes a named contact. <b>Miss it, and it goes cold.</b></p>
     <div class="legend">
       <div class="lg"><div class="h">Plane</div><div class="k">Ad engagement</div><div class="kk">press 1</div></div>
       <div class="lg"><div class="h">Train</div><div class="k">News signals</div><div class="kk">press 2</div></div>
@@ -344,6 +355,7 @@
       <div class="es"><div class="v" id="eMissed">0</div><div class="k">Signals missed</div></div>
       <div class="es" id="esPipe"><div class="v" id="ePipeMissed">$0</div><div class="k" id="ePipeK">Pipeline missed</div></div>
     </div>
+    <div id="coldList" class="hidden"><div class="clh">Who went cold on your watch</div><div id="coldRows"></div></div>
     <p class="handoff" id="endBody1">You chased four types of intent signals manually, leaving a lot on the table.</p>
     <p class="handoff">Champion's system automatically resolves intent signals to named contacts and accounts, <b>so you never miss a thing.</b></p>
     <p class="handoff last">Want to see who's broadcasting inside <em>your</em> market?</p>
@@ -398,6 +410,13 @@ const LANES = {
 const DOMAINS = ['sky','ocean','road','rail'];
 // each mode hunts one category of intent signal
 const CAT = {sky:'Ad Engagement', ocean:'Email Engagement', road:'Website Engagement', rail:'News Signal'};
+// every signal is a SPECIFIC high-intent buying action — this is what "missing a signal" actually means
+const ACTS = {
+  sky:  ['CLICKED YOUR AD · 3RD TIME','ENGAGED YOUR RETARGETING AD','WATCHED YOUR VIDEO AD TWICE','CLICKED YOUR LINKEDIN AD'],
+  ocean:['OPENED PROPOSAL · 4TH TIME','FORWARDED EMAIL TO THEIR VP','CLICKED YOUR CASE STUDY','REPLIED ASKING FOR PRICING'],
+  road: ['VIEWED PRICING · 3RD TIME','STARTED THE ROI CALCULATOR','DOWNLOADED YOUR BUYER’S GUIDE','12 MINUTES ON YOUR SITE'],
+  rail: ['ANNOUNCED $40M FUNDING','HIRED A NEW VP OF OPS','OPENED A NEW DISTRIBUTION HUB','POSTED RECORD Q3 VOLUME'],
+};
 
 const WORLD_LEN = 12000;   // long corridor down +Z
 const rand=(a,b)=>a+Math.random()*(b-a);
@@ -1072,7 +1091,7 @@ function mkSignal(dom){ const L=LANES[dom]; const grp=new THREE.Group();
   scene.add(grp);
   // life ends when the signal clears the back of the vehicle (its whole length is a catch zone)
   const life=(z-v.z+(v.reachB||18))/v.speed;
-  return {dom,grp,x,y,z,life,maxLife:life,dz0:z-v.z,lead:genLead(),val:Math.round(rand(64,96))*130,dead:false,caught:false,t:rand(0,10)};
+  return {dom,grp,x,y,z,life,maxLife:life,dz0:z-v.z,lead:genLead(),act:pick(ACTS[dom]),val:Math.round(rand(64,96))*130,dead:false,caught:false,t:rand(0,10)};
 }
 // signals dealt from a shuffled bag (fair mode mix, max one per mode);
 // cadence and concurrency ramp up as the hunt progresses
@@ -1083,7 +1102,7 @@ function spawnNext(){
     const d=bag.pop(); if(signals[d].length){ bag.unshift(d); continue; }
     const s=mkSignal(d); if(!s){ bag.unshift(d); nextSpawnIn=Math.max(nextSpawnIn,0.35); continue; }
     signals[d].push(s); totalSpawned++;
-    showAlert(d);
+    showAlert(d,s.act);
     domEls[d].classList.add('fresh'); setTimeout(()=>domEls[d].classList.remove('fresh'),2200);
     cueSpawn(d); return; } }
 function liveCount(){ let n=0; for(const d of DOMAINS) n+=signals[d].length; return n; }
@@ -1212,7 +1231,9 @@ const wCount=document.getElementById('wCount'),warmlist=document.getElementById(
 const domEls={}; document.querySelectorAll('.dom').forEach(el=>domEls[el.dataset.dom]=el);
 const subEls={sky:subSky,ocean:subOcean,road:subRoad,rail:subRail};
 const lifeEls={sky:lifeSky,ocean:lifeOcean,road:lifeRoad,rail:lifeRail};
+const catEls={}; for(const d of ['sky','ocean','road','rail']) catEls[d]=document.querySelector('.dom[data-dom="'+d+'"] .cat');
 let pipeline=0,missedPipe=0,caught=0,missed=0,timeLeft=90,running=false,ended=false,paused=false,freePlay=false,elapsed=0,streak=0,bestStreak=0,lastStreakShown=-1;
+let missedLeads=[];                                   // the people who went cold — itemized on the end card
 // difficulty dial p∈[0,1]: timed = ramp over 90s to the finish; free play = slower 180s warm-up,
 // then endless waves oscillating between medium (0.5) and full (1.0)
 function difficulty(){ if(!running) return 0;
@@ -1244,7 +1265,8 @@ function addWarm(lead,score){ const d=document.createElement('div'); d.className
 const alertEl=document.getElementById('alert'),alertType=document.getElementById('alertType'),alertMode=document.getElementById('alertMode');
 const MODE_NAME={sky:['PLANE','1'],rail:['TRAIN','2'],road:['TRUCK','3'],ocean:['SHIP','4']};
 let alertT;
-function showAlert(d){ alertType.textContent=CAT[d].toUpperCase();
+function showAlert(d,act){ alertType.textContent=act||CAT[d].toUpperCase(); // headline = the ACTUAL buying action
+  document.querySelector('#alert .a-kick').textContent=CAT[d].toUpperCase()+' · NEW SIGNAL';
   const mob=matchMedia('(max-width:760px)').matches; // no keyboard on mobile — they tap the chip
   alertMode.innerHTML = d===active ? 'YOU’RE IN POSITION — <b>'+MODE_NAME[d][0]+'</b> IS LIVE'
                                    : 'SWITCH TO <b>'+MODE_NAME[d][0]+'</b>'+(mob?'':' · PRESS <b>'+MODE_NAME[d][1]+'</b>');
@@ -1385,11 +1407,13 @@ function tick(dt,t){
         if(dz<(v.reachF||9) && dz>-(v.reachB||18) && dx<cr && dy<14){
           s.caught=true; const val=s.val, score=val/130; pipeline+=val; caught++;
           streak++; if(streak>bestStreak) bestStreak=streak;
-          addWarm(s.lead,score); burst(s.x,s.y,s.z); flash('SIGNAL CAPTURED  +$'+val.toLocaleString(),'#F9AC24');
+          addWarm(s.lead,score); burst(s.x,s.y,s.z); flash('CAPTURED · '+s.lead.name.toUpperCase()+' · +$'+val.toLocaleString(),'#F9AC24');
           cueCatch(); fovPunch=5.5; shake=0.5; killSignal(s); }
       }
       if(!s.caught && (s.life<=0 || s.z - v.z < -((v.reachB||18)+8))){ // cold / past the stern
-        if(running){ missed++; missedPipe+=s.val; streak=0; cueMiss(); flash('SIGNAL LOST','#E4572E'); }
+        if(running){ missed++; missedPipe+=s.val; streak=0; cueMiss();
+          missedLeads.push({name:s.lead.name,title:s.lead.title,co:s.lead.co,act:s.act,val:s.val});
+          flash('GONE COLD · '+s.lead.name.toUpperCase(),'#E4572E'); }
         killSignal(s); }
     }
     signals[d]=arr.filter(s=>!s.dead);
@@ -1407,10 +1431,11 @@ function tick(dt,t){
       // point (v.z), exactly as before — only the CATCH zone spans the whole hull
       const secs=Math.max(0,Math.floor((s.z-v.z+18)/v.speed));
       subEls[d].innerHTML='<b>◈ INCOMING · </b>'+dz+'m · '+secs+'s';
+      catEls[d].textContent=s.act;                                     // the chip shows the ACTUAL buying action while it's live
       lifeEls[d].style.width=Math.max(0,Math.min(100,((s.z-v.z)/s.dz0)*100))+'%';
       el.classList.add('live'); el.classList.toggle('urgent', (s.z-v.z+18)/v.speed<5);
       el.classList.toggle('crit', (s.z-v.z)/v.speed<1); }              // meter reds only in the final second
-    else { subEls[d].textContent='— watching —'; lifeEls[d].style.width='0%'; el.classList.remove('live'); el.classList.remove('urgent'); el.classList.remove('crit'); }
+    else { subEls[d].textContent='— watching —'; catEls[d].textContent=CAT[d]; lifeEls[d].style.width='0%'; el.classList.remove('live'); el.classList.remove('urgent'); el.classList.remove('crit'); }
   }
   updateHUD();
 
@@ -1533,7 +1558,7 @@ const startCard=document.getElementById('startCard'),endCard=document.getElement
 function resetGame(){ for(const d of DOMAINS){ for(const s of signals[d]) if(!s.dead) killSignal(s); signals[d]=[]; }
   const st={sky:{x:0,y:60,z:40},ocean:{x:LANES.ocean.x,y:0.6,z:20},road:{x:LANES.road.x,y:0.3,z:60},rail:{x:LANES.rail.x,y:1.0,z:30}};
   for(const d of DOMAINS){ Object.assign(vehicles[d],st[d]); vehicles[d].steer=0; vehicles[d].roll=0; }
-  pipeline=0;missedPipe=0;caught=0;missed=0;timeLeft=90;elapsed=0;streak=0;bestStreak=0;lastStreakShown=-1;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; warmlist.innerHTML=''; wCount.textContent='0';
+  pipeline=0;missedPipe=0;caught=0;missed=0;timeLeft=90;elapsed=0;streak=0;bestStreak=0;lastStreakShown=-1;ended=false; totalSpawned=0; nextSpawnIn=1.2; bag=[]; missedLeads=[]; warmlist.innerHTML=''; wCount.textContent='0';
   setActive('road'); updateHUD(); }
 function startGame(fp){ freePlay=!!fp; initAudio(); resetGame(); startCard.classList.add('hidden'); endCard.classList.add('hidden');
   document.body.classList.toggle('freeplay',freePlay);            // reveals the Streak stat
@@ -1544,6 +1569,11 @@ function endGame(){ if(ended)return; ended=true; running=false; paused=false;
   document.getElementById('pausedOv').classList.add('hidden');
   if(actx&&actx.state==='suspended') actx.resume(); musicOn(false);
   document.getElementById('eMissed').textContent=missed;
+  // itemize the biggest misses: real names + the high-intent action that went cold
+  { const cl=document.getElementById('coldList'), rows=document.getElementById('coldRows');
+    const top=missedLeads.slice().sort((a,b)=>b.val-a.val).slice(0,4);
+    cl.classList.toggle('hidden',!top.length);
+    rows.innerHTML=top.map(m=>'<div class="cl"><span class="lost">−$'+m.val.toLocaleString()+'</span><b>'+m.name+'</b> <span class="who">· '+m.title+' · '+m.co+'</span><br><span class="act">'+m.act+'</span> — went cold</div>').join(''); }
   const esPipe=document.getElementById('esPipe');
   if(freePlay){ document.getElementById('ePipeMissed').textContent=bestStreak; document.getElementById('ePipeK').textContent='Best streak'; esPipe.classList.add('streakbox'); }
   else { document.getElementById('ePipeMissed').textContent='$'+missedPipe.toLocaleString(); document.getElementById('ePipeK').textContent='Pipeline missed'; esPipe.classList.remove('streakbox'); }
