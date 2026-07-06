@@ -1287,8 +1287,8 @@ document.addEventListener('fullscreenchange',()=>{ document.getElementById('fsBt
 addEventListener('keydown',e=>{ keys[e.code]=true;
   if(e.code==='Space' && !e.repeat) togglePause();
   if(e.code==='KeyF' && !e.repeat) toggleFullscreen();
-  if(e.code==='Digit1')setActive('sky'); if(e.code==='Digit2')setActive('rail');
-  if(e.code==='Digit3')setActive('road'); if(e.code==='Digit4')setActive('ocean');
+  if(e.code==='Digit1'||e.code==='Numpad1')setActive('sky');  if(e.code==='Digit2'||e.code==='Numpad2')setActive('rail');
+  if(e.code==='Digit3'||e.code==='Numpad3')setActive('road'); if(e.code==='Digit4'||e.code==='Numpad4')setActive('ocean');
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code))e.preventDefault();
 });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
