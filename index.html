@@ -1356,6 +1356,27 @@ addEventListener('mousemove',e=>{ if(!mouseCtl){ mouse.mx=0; mouse.my=0; return;
   const shape=n=>{ const a=Math.abs(n); if(a<DEAD) return 0; return Math.sign(n)*Math.min(1,(a-DEAD)/(1-DEAD)*SENS); };
   mouse.mx=shape((e.clientX/innerWidth-0.5)*2);
   mouse.my=shape((0.5-e.clientY/innerHeight)*2); });   // cursor above center = climb
+// gamepad (Xbox etc., standard mapping) — always-on additive input, polled per frame.
+// Left stick = steer/altitude; Y/X/A/B + d-pad = direct mode select; LB/RB cycle; Menu = pause.
+const pad={mx:0,my:0}; let padPrev=[];
+function pollPad(){ const gps=navigator.getGamepads?navigator.getGamepads():[]; const gp=gps[0]||gps[1]||gps[2]||gps[3];
+  if(!gp){ pad.mx=0; pad.my=0; return; }
+  const DEAD=0.15, shape=n=>{ const a=Math.abs(n); if(a<DEAD) return 0;
+    return Math.sign(n)*Math.pow((a-DEAD)/(1-DEAD),1.4); };          // gentle expo: fine control near center
+  pad.mx=shape(gp.axes[0]||0); pad.my=shape(-(gp.axes[1]||0));       // stick up = climb
+  const btn=i=>!!(gp.buttons[i]&&gp.buttons[i].pressed), edge=i=>btn(i)&&!padPrev[i];
+  if(edge(9)) togglePause();                                          // Menu/Start
+  if(edge(3)||edge(12)) setActive('sky');                             // Y / d-pad up    = Plane
+  if(edge(2)||edge(14)) setActive('rail');                            // X / d-pad left  = Train
+  if(edge(0)||edge(13)) setActive('road');                            // A / d-pad down  = Truck
+  if(edge(1)||edge(15)) setActive('ocean');                           // B / d-pad right = Ship
+  if(edge(4)||edge(5)){ const O=['sky','rail','road','ocean'], i=O.indexOf(active);
+    setActive(O[(i+(edge(5)?1:O.length-1))%O.length]); }              // LB/RB cycle modes
+  padPrev=gp.buttons.map(b=>b.pressed); }
+function padRumble(dur,strong,weak){ try{ const gps=navigator.getGamepads?navigator.getGamepads():[];
+  const gp=gps[0]||gps[1]; if(gp&&gp.vibrationActuator&&gp.vibrationActuator.playEffect)
+    gp.vibrationActuator.playEffect('dual-rumble',{duration:dur,strongMagnitude:strong,weakMagnitude:weak}).catch(()=>{}); }catch(_){} }
+addEventListener('gamepadconnected',()=>{ flash('CONTROLLER CONNECTED','#F9AC24'); padRumble(200,0.5,0.5); });
 
 // TEMP calibration bot — plays through the real key/steering path (remove before real go-live)
 let botOn=false,botDelay=0,botWait=0,botKey=null;
@@ -1383,6 +1404,7 @@ let frames=0, simT=0, fovPunch=0, shake=0;
 let swT=1, swDir=0; const swFrom=new THREE.Vector3(); // mode-switch whip-pan: fixed 0.42s beat, eased
 function frame(){
   requestAnimationFrame(frame);
+  pollPad();                                 // before tick: Menu must unpause while the sim is frozen
   tick(Math.min(clock.getDelta(),0.05), clock.elapsedTime);
 }
 function tick(dt,t){
@@ -1401,8 +1423,9 @@ function tick(dt,t){
     } else if(d===active && running){ if(keys['ArrowLeft']||keys['KeyA']||touch.left)steer+=1; if(keys['ArrowRight']||keys['KeyD']||touch.right)steer-=1;
       steer-=touch.dragX;                                    // drag: finger-right = steer screen-right (proportional)
       if(mouseCtl) steer-=mouse.mx;                          // mouse virtual stick: cursor-right = steer screen-right
+      steer-=pad.mx;                                         // gamepad left stick (0 when absent/centered)
       if(d==='sky'){ if(keys['ArrowUp']||keys['KeyW']||touch.up)alt+=1; if(keys['ArrowDown']||keys['KeyS']||touch.down)alt-=1; alt-=touch.dragY;
-        if(mouseCtl) alt+=mouse.my; }
+        if(mouseCtl) alt+=mouse.my; alt+=pad.my; }
     } else { // autopilot eases back toward lane center
       v.x += (L.x - v.x)*Math.min(1,dt*0.9);
     }
@@ -1443,10 +1466,10 @@ function tick(dt,t){
           s.caught=true; const val=s.val, score=val/130; pipeline+=val; caught++;
           streak++; if(streak>bestStreak) bestStreak=streak;
           addWarm(s.lead,score); burst(s.x,s.y,s.z); flash('CAPTURED · '+s.lead.name.toUpperCase()+' · +$'+val.toLocaleString(),'#F9AC24');
-          cueCatch(); fovPunch=5.5; shake=0.5; killSignal(s); }
+          cueCatch(); padRumble(140,1,0.5); fovPunch=5.5; shake=0.5; killSignal(s); }
       }
       if(!s.caught && (s.life<=0 || s.z - v.z < -((v.reachB||18)+8))){ // cold / past the stern
-        if(running){ missed++; missedPipe+=s.val; streak=0; cueMiss();
+        if(running){ missed++; missedPipe+=s.val; streak=0; cueMiss(); padRumble(320,0.2,1);
           missedLeads.push({name:s.lead.name,title:s.lead.title,co:s.lead.co,act:s.act,val:s.val});
           flash('GONE COLD · '+s.lead.name.toUpperCase(),'#E4572E'); }
         killSignal(s); }
@@ -1644,6 +1667,7 @@ window.__step=(n,dt)=>{ for(let i=0;i<(n||60);i++) tick(dt||1/60); return 'stepp
 window.__setActive=d=>{ setActive(d); return active; };
 window.__cam=(x,y,z,tx,ty,tz)=>{ camera.position.set(x,y,z); camera.lookAt(tx,ty,tz); return 'cam set'; }; // TEMP: works while paused
 window.__pos=d=>vehicles[d].mesh.position.toArray(); // TEMP
+window.__pollPad=pollPad; // TEMP (preview rAF is throttled; lets tests drive the gamepad poller)
 window.__veh=d=>vehicles[d].mesh; // TEMP
 updateHUD(); setActive('road');
 setTimeout(()=>{ document.getElementById('loading').style.display='none'; },9000); // safety net if the HDRI stalls
