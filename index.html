@@ -1280,12 +1280,21 @@ function addWarm(lead,score){ const d=document.createElement('div'); d.className
 
 const alertEl=document.getElementById('alert'),alertType=document.getElementById('alertType'),alertMode=document.getElementById('alertMode');
 const MODE_NAME={sky:['PLANE','1'],rail:['TRAIN','2'],road:['TRUCK','3'],ocean:['SHIP','4']};
+// controller connected → the HUD teaches controller buttons instead of number keys
+const PAD_BTN={sky:['Y','#E8C11C'],rail:['X','#3B82D0'],road:['A','#3FA43F'],ocean:['B','#D0453B']};
+let padOn=false;
+function setPadUI(on){ padOn=on;
+  for(const d in PAD_BTN){ const k=document.querySelector('.dom[data-dom="'+d+'"] .key');
+    if(k){ k.textContent = on?PAD_BTN[d][0]:MODE_NAME[d][1]; k.style.color = on?PAD_BTN[d][1]:''; } }
+  const kks=document.querySelectorAll('.legend .lg .kk'), order=['sky','rail','road','ocean'];
+  kks.forEach((el,i)=>{ const d=order[i]; if(d) el.textContent='press '+(on?PAD_BTN[d][0]:MODE_NAME[d][1]); }); }
 let alertT;
 function showAlert(d,act){ alertType.textContent=act||CAT[d].toUpperCase(); // headline = the ACTUAL buying action
   document.querySelector('#alert .a-kick').textContent=CAT[d].toUpperCase()+' · NEW SIGNAL';
   const mob=matchMedia('(max-width:760px)').matches; // no keyboard on mobile — they tap the chip
+  const kb=padOn?PAD_BTN[d][0]:MODE_NAME[d][1];                       // number key, or controller button when a pad is on
   alertMode.innerHTML = d===active ? 'YOU’RE IN POSITION — <b>'+MODE_NAME[d][0]+'</b> IS LIVE'
-                                   : 'SWITCH TO <b>'+MODE_NAME[d][0]+'</b>'+(mob?'':' · PRESS <b>'+MODE_NAME[d][1]+'</b>');
+                                   : 'SWITCH TO <b>'+MODE_NAME[d][0]+'</b>'+(mob?'':' · PRESS <b>'+kb+'</b>');
   alertEl.classList.add('show'); clearTimeout(alertT);
   alertT=setTimeout(()=>alertEl.classList.remove('show'),matchMedia('(max-width:760px)').matches?1800:2600); }
 
@@ -1360,6 +1369,7 @@ addEventListener('mousemove',e=>{ if(!mouseCtl){ mouse.mx=0; mouse.my=0; return;
 // Left stick = steer/altitude; Y/X/A/B + d-pad = direct mode select; LB/RB cycle; Menu = pause.
 const pad={mx:0,my:0}; let padPrev=[];
 function pollPad(){ const gps=navigator.getGamepads?navigator.getGamepads():[]; const gp=gps[0]||gps[1]||gps[2]||gps[3];
+  if(!!gp!==padOn) setPadUI(!!gp);                                    // swap HUD key labels 1-4 ↔ Y/X/A/B
   if(!gp){ pad.mx=0; pad.my=0; return; }
   const DEAD=0.15, shape=n=>{ const a=Math.abs(n); if(a<DEAD) return 0;
     return Math.sign(n)*Math.pow((a-DEAD)/(1-DEAD),1.4); };          // gentle expo: fine control near center
