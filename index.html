@@ -180,6 +180,9 @@
   .ctrltoggle{display:none;margin-top:16px;font-family:var(--mono);font-size:11px;letter-spacing:1px;color:var(--grey-2);cursor:pointer;}
   .ctrltoggle b{color:var(--amber);}
   body.touch .ctrltoggle{display:block;}
+  .ctrltoggle.desk{display:block;}                 /* desktop control scheme: keys vs mouse steering */
+  body.touch .ctrltoggle.desk{display:none;}
+  body.mousectl #app{cursor:crosshair;}
 
   /* ---- overlays ---- */
   .overlay{position:absolute;inset:0;z-index:20;display:flex;align-items:flex-start;justify-content:center;padding:24px;
@@ -345,6 +348,7 @@
     <button class="btn ghost" id="modeBtn">Free play →</button>
     <button class="btn ghost replay" id="startOverBtn">Start over</button>
     <div class="ctrltoggle" id="ctrlToggle">Controls · <b id="ctrlLabel">Drag</b> — tap to switch</div>
+    <div class="ctrltoggle desk" id="ctrlToggleDesk">Steering · <b id="ctrlLabelDesk">Arrow Keys</b> — click to switch</div>
   </div>
 </div>
 
@@ -1297,7 +1301,7 @@ function toggleFullscreen(){ const d=document, el=d.documentElement;
 document.getElementById('fsBtn').addEventListener('click',toggleFullscreen);
 document.addEventListener('fullscreenchange',()=>{ document.getElementById('fsBtn').textContent=document.fullscreenElement?'🡖':'⛶'; });
 addEventListener('keydown',e=>{ keys[e.code]=true;
-  if(e.code==='Space' && !e.repeat) togglePause();
+  if((e.code==='Space'||e.code==='Escape') && !e.repeat) togglePause();
   if(e.code==='KeyF' && !e.repeat) toggleFullscreen();
   if(e.code==='Digit1'||e.code==='Numpad1')setActive('sky');  if(e.code==='Digit2'||e.code==='Numpad2')setActive('rail');
   if(e.code==='Digit3'||e.code==='Numpad3')setActive('road'); if(e.code==='Digit4'||e.code==='Numpad4')setActive('ocean');
@@ -1335,6 +1339,23 @@ const ctrlToggle=document.getElementById('ctrlToggle');
 if(ctrlToggle) ctrlToggle.addEventListener('click',()=>{ dragMode=!dragMode;
   try{ localStorage.setItem('sh_ctrl',dragMode?'drag':'buttons'); }catch(_){}
   touch.left=touch.right=touch.up=touch.down=false; touch.dragX=touch.dragY=0; applyCtrl(); });
+// desktop mouse steering — a virtual stick: cursor offset from screen center = proportional steer/altitude.
+// Secondary option (keys always work); toggled in the pause menu, persisted per device.
+let mouseCtl=false; try{ mouseCtl=localStorage.getItem('sh_ctrl_mouse')==='mouse'; }catch(_){}
+const mouse={mx:0,my:0};
+function applyMouseCtl(){ document.body.classList.toggle('mousectl',mouseCtl);
+  const l=document.getElementById('ctrlLabelDesk'); if(l) l.textContent=mouseCtl?'Mouse':'Arrow Keys'; }
+applyMouseCtl();
+document.getElementById('ctrlToggleDesk').addEventListener('click',()=>{ mouseCtl=!mouseCtl;
+  try{ localStorage.setItem('sh_ctrl_mouse',mouseCtl?'mouse':'keys'); }catch(_){}
+  mouse.mx=0; mouse.my=0; applyMouseCtl(); });
+addEventListener('mousemove',e=>{ if(!mouseCtl){ mouse.mx=0; mouse.my=0; return; }
+  // hovering UI = neutral, so traveling to click a mode box doesn't steer you off course
+  if(e.target && e.target.closest && e.target.closest('.dom,#pauseBtn,#fsBtn,.overlay,#warm,#topbar,#stats')){ mouse.mx=0; mouse.my=0; return; }
+  const DEAD=0.07, SENS=1.5;
+  const shape=n=>{ const a=Math.abs(n); if(a<DEAD) return 0; return Math.sign(n)*Math.min(1,(a-DEAD)/(1-DEAD)*SENS); };
+  mouse.mx=shape((e.clientX/innerWidth-0.5)*2);
+  mouse.my=shape((0.5-e.clientY/innerHeight)*2); });   // cursor above center = climb
 
 // TEMP calibration bot — plays through the real key/steering path (remove before real go-live)
 let botOn=false,botDelay=0,botWait=0,botKey=null;
@@ -1379,7 +1400,9 @@ function tick(dt,t){
       v.x=L.x;
     } else if(d===active && running){ if(keys['ArrowLeft']||keys['KeyA']||touch.left)steer+=1; if(keys['ArrowRight']||keys['KeyD']||touch.right)steer-=1;
       steer-=touch.dragX;                                    // drag: finger-right = steer screen-right (proportional)
-      if(d==='sky'){ if(keys['ArrowUp']||keys['KeyW']||touch.up)alt+=1; if(keys['ArrowDown']||keys['KeyS']||touch.down)alt-=1; alt-=touch.dragY; }
+      if(mouseCtl) steer-=mouse.mx;                          // mouse virtual stick: cursor-right = steer screen-right
+      if(d==='sky'){ if(keys['ArrowUp']||keys['KeyW']||touch.up)alt+=1; if(keys['ArrowDown']||keys['KeyS']||touch.down)alt-=1; alt-=touch.dragY;
+        if(mouseCtl) alt+=mouse.my; }
     } else { // autopilot eases back toward lane center
       v.x += (L.x - v.x)*Math.min(1,dt*0.9);
     }
