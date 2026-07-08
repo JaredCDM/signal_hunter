@@ -947,7 +947,7 @@ const blobs={ road:blob(7.5,23), rail:blob(7.5,66) }; // no ocean blob — a fla
 let active='road';
 
 // ---------- Champion jet (Jared's Jet3 GLB — livery baked in by the designer) ----------
-new GLTFLoader().loadAsync('assets/champion-jet3.glb').catch(()=>null).then(gltf=>{
+new GLTFLoader().loadAsync('assets/champion-jet4.glb').catch(()=>null).then(gltf=>{
   if(!gltf) return;                                        // procedural plane stays as fallback
   const jet=gltf.scene;
   jet.traverse(o=>{ if(!o.isMesh) return; o.castShadow=true;
