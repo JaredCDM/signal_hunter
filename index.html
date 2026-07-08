@@ -84,7 +84,7 @@
   .stat{background:rgba(20,20,20,0.5);border:1px solid var(--line);padding:7px 13px;backdrop-filter:blur(3px);}
   .stat .k{font-size:9px;letter-spacing:2px;color:var(--grey-2);text-transform:uppercase;}
   .stat .v{font-family:var(--display);font-style:italic;font-size:23px;line-height:1.15;margin-top:2px;color:var(--cream);}
-  .stat.money .v{color:var(--amber);}
+  .stat.money .v{color:var(--red);} /* Pipeline Missed — loss reads red, matching the end card */
   .stat.time .v.low{color:var(--red);}
   .stat.time{pointer-events:auto;cursor:pointer;} /* tap the clock to pause (mobile has no spacebar) */
   #pauseBtn{display:none;position:absolute;top:calc(3.2vh + 10px);right:12px;z-index:9;width:40px;height:40px;
@@ -291,7 +291,7 @@
 </div>
 
 <div id="stats">
-  <div class="stat money"><div class="k">Pipeline</div><div class="v" id="hPipe">$0</div></div>
+  <div class="stat money"><div class="k">Pipeline Missed</div><div class="v" id="hPipe">$0</div></div>
   <div class="stat"><div class="k">Signals</div><div class="v" id="hCaught">0</div></div>
   <div class="stat streak" id="streakStat"><div class="k">Streak</div><div class="v" id="hStreak">0</div></div>
   <div class="stat time"><div class="k">Time</div><div class="v" id="hTime">90</div></div>
@@ -1268,7 +1268,7 @@ function setActive(d){ if(paused) return; const changed=d!==active;
   if(changed && running){ swFrom.copy(camera.position); swDir=Math.sign(LANES[d].x-LANES[active].x); swT=0; } // whip-pan: fixed beat from wherever the camera is now
   active=d; for(const k in domEls) domEls[k].classList.toggle('active',k===d);
   if(changed && actx && running) musicFor(d); }
-function updateHUD(){ hPipe.textContent='$'+pipeline.toLocaleString();
+function updateHUD(){ hPipe.textContent = missedPipe ? '-$'+missedPipe.toLocaleString() : '$0'; // loss counter: what's slipping away
   const resolved=caught+missed; // only signals that actually came and went — live ones don't count against you
   hCaught.textContent=resolved?caught+'/'+resolved:caught;
   if(freePlay){ hTime.textContent=Math.floor(elapsed/60)+':'+String(Math.floor(elapsed%60)).padStart(2,'0'); hTime.classList.remove('low'); }
