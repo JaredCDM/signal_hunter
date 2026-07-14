@@ -237,6 +237,12 @@
   .capture .btn{flex:1 1 100%;}
   .finewhy{font-size:11px;color:var(--grey);line-height:1.5;}
   .replay{margin-top:14px;}
+  /* every Champion logo links to the site — pointer + soft glow as the affordance */
+  .sitelink{cursor:pointer;pointer-events:auto;transition:filter .2s;}
+  .sitelink:hover{filter:drop-shadow(0 0 9px rgba(249,172,36,.75));}
+  .credit{margin-top:16px;font-family:var(--mono);font-size:10.5px;letter-spacing:1.5px;color:var(--grey-2);}
+  .credit a{color:var(--amber);text-decoration:none;}
+  .credit a:hover{text-decoration:underline;}
   #loading{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:#0c0d10;
     font-family:var(--mono);font-size:11px;letter-spacing:3px;color:var(--grey-2);}
   #loading .l{text-align:center;}
@@ -334,6 +340,7 @@
       <div class="lg"><div class="h">Ship</div><div class="k">Email engagement</div><div class="kk">press 4</div></div>
     </div>
     <button class="btn" id="startBtn">Start signal hunting →</button>
+    <p class="credit">A game by <a href="https://championdigitalmedia.com/?utm_source=signal_hunter&utm_medium=game&utm_content=title_credit" target="_blank" rel="noopener">Champion Digital Media</a></p>
   </div>
 </div>
 
@@ -372,6 +379,7 @@
       <button class="btn" id="capBtn">Request live demo →</button>
     </div>
     <p class="finewhy" id="capNote">See how we find who is leaning in.</p>
+    <p class="credit"><a href="https://championdigitalmedia.com/?utm_source=signal_hunter&utm_medium=game&utm_content=endcard" target="_blank" rel="noopener">championdigitalmedia.com</a></p>
     <button class="btn ghost replay" id="replayBtn">Play again</button>
     <button class="btn ghost" id="freeBtn">Free play →</button>
   </div>
@@ -1659,6 +1667,15 @@ function endGame(){ if(ended)return; ended=true; running=false; paused=false;
     b1.textContent='You chased four types of intent signals manually, leaving a lot on the table.'; }
   endCard.classList.remove('hidden'); }
 
+// every Champion logo → the site, new tab (auto-pause covers mid-run clicks), UTM per placement
+{ const SITE='https://championdigitalmedia.com/?utm_source=signal_hunter&utm_medium=game&utm_content=';
+  const linkify=(el,tag)=>{ if(!el) return; el.classList.add('sitelink'); el.title='championdigitalmedia.com';
+    el.addEventListener('click',e=>{ e.stopPropagation(); window.open(SITE+tag,'_blank','noopener'); }); };
+  linkify(document.querySelector('#topbar .champlogo'),'topbar');
+  linkify(document.querySelector('#startCard .champlogo'),'title_logo');
+  linkify(document.querySelector('#pausedOv .champlogo'),'pause_logo');
+  linkify(document.querySelector('#endCard .champlogo'),'endcard_logo');
+  linkify(document.querySelector('#loading .champlogo'),'loading_logo'); }
 document.getElementById('startBtn').addEventListener('click',()=>startGame(false));       // title = timed
 document.getElementById('replayBtn').addEventListener('click',()=>startGame(freePlay));    // end card primary: replay current mode
 document.getElementById('resumeBtn').addEventListener('click',togglePause);
