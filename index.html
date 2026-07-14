@@ -1686,7 +1686,7 @@ document.querySelector('.stat.time').addEventListener('click',()=>{ if(running) 
 document.getElementById('pauseBtn').addEventListener('click',()=>{ if(running) togglePause(); });
 document.getElementById('capBtn').addEventListener('click',()=>{ const n=capName.value.trim(),em=capEmail.value.trim(),note=document.getElementById('capNote');
   if(!em||em.indexOf('@')<1){note.textContent='Add a work email and we’ll set up your live demo.';note.style.color='#F9AC24';return;}
-  note.style.color='#F9AC24'; note.textContent='Got it'+(n?', '+n:'')+'. We’ll reach out to schedule your live demo. (Prototype: wire this to ChamPortal on go-live.)'; capBtn.textContent='Requested ✓'; });
+  note.style.color='#F9AC24'; note.textContent='Got it'+(n?', '+n:'')+'. We’ll reach out to schedule your live demo.'; capBtn.textContent='Requested ✓'; });
 
 // boot
 // TEMP DEBUG (remove before ship): manual sim stepper for headless screenshot testing
