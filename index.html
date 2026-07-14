@@ -1684,8 +1684,13 @@ document.getElementById('freeBtn').addEventListener('click',()=>startGame(!freeP
 document.getElementById('modeBtn').addEventListener('click',()=>{ if(freePlay) endGame(); else startGame(true); }); // pause: End run / Free play
 document.querySelector('.stat.time').addEventListener('click',()=>{ if(running) togglePause(); });
 document.getElementById('pauseBtn').addEventListener('click',()=>{ if(running) togglePause(); });
+const LEAD_WEBHOOK='https://signal-hunter-leads.jared-2af.workers.dev';
 document.getElementById('capBtn').addEventListener('click',()=>{ const n=capName.value.trim(),em=capEmail.value.trim(),note=document.getElementById('capNote');
   if(!em||em.indexOf('@')<1){note.textContent='Add a work email and we’ll set up your live demo.';note.style.color='#F9AC24';return;}
+  // fire-and-forget: Slack + ChamPortal via the worker; the run stats ride along as sales context
+  try{ fetch(LEAD_WEBHOOK,{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({name:n,email:em,caught,missed,missedPipe,pipeline,bestStreak,freePlay,page:location.href,ua:navigator.userAgent})
+  }).catch(()=>{}); }catch(_){}
   note.style.color='#F9AC24'; note.textContent='Got it'+(n?', '+n:'')+'. We’ll reach out to schedule your live demo.'; capBtn.textContent='Requested ✓'; });
 
 // boot
